@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { AgendaItem, Category, PlaceOpeningHours } from '../types';
-import { fetchPlaceDetails, getCategoryFromTypes } from '../googleMaps';
+import { fetchPlaceDetails, fetchPlaceExtras, getCategoryFromTypes } from '../googleMaps';
 
 interface Props {
   item?: AgendaItem;
@@ -27,7 +27,7 @@ export function EditModal({ item, onSave, onDelete, onCopy, onClose, availableDa
   const [lat, setLat] = useState<number | undefined>(item?.lat);
   const [lng, setLng] = useState<number | undefined>(item?.lng);
   const [openingHours, setOpeningHours] = useState<PlaceOpeningHours | undefined>(item?.openingHours);
-  const [reservable, setReservable] = useState<boolean | undefined>(item?.reservable);
+  const [reservable] = useState<boolean | undefined>(item?.reservable);
   const [suggestedDuration, setSuggestedDuration] = useState<number | undefined>(item?.suggestedDuration);
   const [fetching, setFetching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,12 +40,15 @@ export function EditModal({ item, onSave, onDelete, onCopy, onClose, availableDa
       if (details) {
         if (!title) setTitle(details.name);
         if (!location) setLocation(details.formatted_address || '');
-        if (!imageUrl && details.photos?.[0]) setImageUrl(details.photos[0]);
         setLat(details.lat);
         setLng(details.lng);
         setCategory(getCategoryFromTypes(details.types || []) as Category);
-        setOpeningHours(details.openingHours);
-        setReservable(details.reservable);
+        // Fetch photos + openingHours separately (cheaper Place Details call)
+        const extras = await fetchPlaceExtras(details.place_id);
+        if (extras) {
+          if (!imageUrl && extras.photos?.[0]) setImageUrl(extras.photos[0]);
+          if (extras.openingHours) setOpeningHours(extras.openingHours);
+        }
       }
       setFetching(false);
     }

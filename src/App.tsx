@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -53,6 +53,7 @@ function App() {
   const [showScheduleImport, setShowScheduleImport] = useState(false);
   const [clipboard, setClipboard] = useState<AgendaItem[] | null>(null);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const tripFileInputRef = useRef<HTMLInputElement>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [itineraryTabs, setItineraryTabs] = useState<ItineraryTab[]>(() => loadItineraryTabs());
   const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
@@ -93,6 +94,31 @@ function App() {
     };
     setItineraryTabs(prev => [...prev, newTab]);
     switchItinerary(newTab.id);
+  };
+
+  const handleImportTrip = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = JSON.parse(reader.result as string);
+        if (!imported.title || !imported.days) {
+          alert('Invalid trip file: missing title or days.');
+          return;
+        }
+        const newId = uuid();
+        const newTab: ItineraryTab = { id: newId, name: imported.title };
+        localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(imported));
+        setItineraryTabs(prev => [...prev, newTab]);
+        switchItinerary(newId);
+      } catch {
+        alert('Could not parse trip file. Make sure it is valid JSON.');
+      }
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-imported
+    e.target.value = '';
   };
 
   const sensors = useSensors(
@@ -392,23 +418,32 @@ function App() {
               className="export-btn"
               onClick={() => {
                 const json = JSON.stringify(trip, null, 2);
-                navigator.clipboard.writeText(json).then(
-                  () => alert('Trip JSON copied to clipboard!'),
-                  () => {
-                    // Fallback: download as file
-                    const blob = new Blob([json], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${trip.title.replace(/\s+/g, '-')}.json`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }
-                );
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const tabName = itineraryTabs.find(t => t.id === activeItineraryId)?.name || trip.title;
+                a.download = `${tabName.replace(/\s+/g, '-')}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
               }}
-              title="Copy trip data as JSON (paste into src/demoTrip.ts to set as default)"
+              title="Download trip as JSON file"
             >
               📋 Export Trip
+            </button>
+            <input
+              ref={tripFileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportTrip}
+            />
+            <button
+              className="import-btn"
+              onClick={() => tripFileInputRef.current?.click()}
+              title="Upload a trip JSON file as a new itinerary"
+            >
+              📂 Import Trip
             </button>
           </div>
         </div>

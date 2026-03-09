@@ -3,6 +3,7 @@ import { Trip, Day, AgendaItem, Category } from './types';
 import { ScheduleEntry } from './utils/scheduleParser';
 import { v4 as uuid } from 'uuid';
 import { demoTrip } from './demoTrip';
+import { migrateGooglePhotoUrls } from './googleMaps';
 
 const DEFAULT_ITINERARY_ID = 'default';
 const ACTIVE_ITINERARY_KEY = 'travel-active-itinerary-id';
@@ -44,6 +45,34 @@ export function useTripStore() {
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(trip));
   }, [trip, storageKey]);
+
+  // One-time migration: convert Google Places photo URLs to base64 data URLs
+  // to stop recurring billable Place Photos API calls on every render.
+  useEffect(() => {
+    const allItems = [
+      ...trip.days.flatMap(d => d.items),
+      ...trip.unassignedItems,
+    ];
+    migrateGooglePhotoUrls(allItems).then(migrated => {
+      if (migrated.length === 0) return;
+      const updateMap = new Map(migrated.map(m => [m.id, m]));
+      setTrip(prev => ({
+        ...prev,
+        days: prev.days.map(day => ({
+          ...day,
+          items: day.items.map(item => {
+            const u = updateMap.get(item.id);
+            return u ? { ...item, ...u } : item;
+          })
+        })),
+        unassignedItems: prev.unassignedItems.map(item => {
+          const u = updateMap.get(item.id);
+          return u ? { ...item, ...u } : item;
+        })
+      }));
+      console.log(`Migrated ${migrated.length} Google photo URLs to data URLs`);
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (geminiKey) localStorage.setItem('gemini-api-key', geminiKey);

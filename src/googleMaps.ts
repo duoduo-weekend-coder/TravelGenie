@@ -18,6 +18,26 @@ export interface PlaceDetails {
   comment?: string;
 }
 
+/**
+ * Fetch an image URL and convert it to a base64 data URL.
+ * This avoids repeated billable Place Photos API calls when the image
+ * is rendered in <img> tags on every React re-render.
+ */
+async function photoToDataUrl(url: string): Promise<string> {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(url); // fallback to original URL
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return url; // fallback to original URL if fetch fails (CORS, etc.)
+  }
+}
+
 let loadingPromise: Promise<void> | null = null;
 
 async function loadGoogleMapsSDK(): Promise<void> {
@@ -140,9 +160,11 @@ export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | n
   try {
     const { Place } = (window as any).google.maps.places;
 
+    // Only request Basic-tier fields to avoid Preferred/Advanced pricing.
+    // Photos and openingHours are fetched on-demand via fetchPlaceExtras().
     const request = {
       textQuery: query,
-      fields: ['id', 'displayName', 'formattedAddress', 'location', 'photos', 'googleMapsURI', 'types', 'regularOpeningHours'],
+      fields: ['id', 'displayName', 'formattedAddress', 'location', 'googleMapsURI', 'types'],
     };
 
     const { places } = await Place.searchByText(request);
@@ -150,28 +172,15 @@ export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | n
     if (places && places.length > 0) {
       const place = places[0];
 
-      let photos: string[] = [];
-      if (place.photos && place.photos.length > 0) {
-        photos = [place.photos[0].getURI({ maxWidth: 400, maxHeight: 400 })];
-      }
-
       const result: PlaceDetails = {
         place_id: place.id,
         name: place.displayName,
         formatted_address: place.formattedAddress,
         lat: place.location?.lat(),
         lng: place.location?.lng(),
-        photos,
+        photos: [],
         url: place.googleMapsURI,
         types: place.types,
-        openingHours: place.regularOpeningHours ? {
-          periods: place.regularOpeningHours.periods?.map((p: any) => ({
-             open: { day: p.open.day, hour: p.open.hour, minute: p.open.minute },
-             close: p.close ? { day: p.close.day, hour: p.close.hour, minute: p.close.minute } : null
-          })) || [],
-          weekdayDescriptions: place.regularOpeningHours.weekdayDescriptions || []
-        } : undefined
-        // reservable field removed to prevent API error
       };
 
       // Write to cache
@@ -192,6 +201,58 @@ export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | n
 export async function fetchMultiplePlaces(urls: string[]): Promise<(PlaceDetails | null)[]> {
   const results = await Promise.all(urls.map(url => fetchPlaceDetails(url)));
   return results;
+}
+
+/**
+ * Lazily fetch expensive fields (photos, openingHours) for a place by ID.
+ * Uses Place Details (cheaper than Text Search) and only called when the user
+ * actually views/edits a specific place.
+ */
+export async function fetchPlaceExtras(placeId: string): Promise<{ photos?: string[]; openingHours?: PlaceOpeningHours } | null> {
+  await initMaps();
+
+  // Check if extras are already cached for this place (and already converted to data URLs)
+  const cache = loadPlaceCache();
+  const cacheKey = Object.keys(cache).find(k => cache[k].place_id === placeId);
+  if (cacheKey) {
+    const cached = cache[cacheKey];
+    const hasLocalPhotos = cached.photos && cached.photos.length > 0 &&
+      !cached.photos.some(p => isGooglePhotoUrl(p));
+    if (hasLocalPhotos || cached.openingHours) {
+      return { photos: cached.photos, openingHours: cached.openingHours };
+    }
+  }
+
+  try {
+    const { Place } = (window as any).google.maps.places;
+    const place = new Place({ id: placeId });
+    await place.fetchFields({ fields: ['photos', 'regularOpeningHours'] });
+
+    let photos: string[] = [];
+    if (place.photos && place.photos.length > 0) {
+      const rawUrl = place.photos[0].getURI({ maxWidth: 400, maxHeight: 400 });
+      photos = [await photoToDataUrl(rawUrl)];
+    }
+
+    const openingHours: PlaceOpeningHours | undefined = place.regularOpeningHours ? {
+      periods: place.regularOpeningHours.periods?.map((p: any) => ({
+        open: { day: p.open.day, hour: p.open.hour, minute: p.open.minute },
+        close: p.close ? { day: p.close.day, hour: p.close.hour, minute: p.close.minute } : null
+      })) || [],
+      weekdayDescriptions: place.regularOpeningHours.weekdayDescriptions || []
+    } : undefined;
+
+    // Update cache with extras
+    if (cacheKey) {
+      cache[cacheKey] = { ...cache[cacheKey], photos, openingHours };
+      writePlaceCache(cache);
+    }
+
+    return { photos, openingHours };
+  } catch (e) {
+    console.error('fetchPlaceExtras error:', e);
+    return null;
+  }
 }
 
 /**
@@ -296,6 +357,48 @@ export async function fetchPlaces(input: string): Promise<PlaceDetails[]> {
   // Single place — pass the resolved URL to avoid redundant short-URL resolution
   const details = await fetchPlaceDetails(url);
   return details ? [details] : [];
+}
+
+function isGooglePhotoUrl(url: string): boolean {
+  return url.includes('places.googleapis.com') ||
+    url.includes('maps.googleapis.com/maps/api/place/photo') ||
+    url.includes('lh3.googleusercontent.com');
+}
+
+/**
+ * Migrate Google Places photo URLs in a trip's agenda items to base64 data URLs.
+ * This is a one-time migration — after conversion, photos render locally
+ * without making billable Place Photos API calls.
+ * Returns a list of [itemId, field, dataUrl] tuples for items that were migrated.
+ */
+export async function migrateGooglePhotoUrls(
+  items: { id: string; imageUrl?: string; googlePlacePhoto?: string }[]
+): Promise<{ id: string; imageUrl?: string; googlePlacePhoto?: string }[]> {
+  const toMigrate = items.filter(
+    item => (item.imageUrl && isGooglePhotoUrl(item.imageUrl)) ||
+            (item.googlePlacePhoto && isGooglePhotoUrl(item.googlePlacePhoto))
+  );
+
+  if (toMigrate.length === 0) return [];
+
+  const results = await Promise.all(
+    toMigrate.map(async (item) => {
+      const updates: { id: string; imageUrl?: string; googlePlacePhoto?: string } = { id: item.id };
+      // If both point to the same URL, convert once
+      const sameUrl = item.imageUrl && item.imageUrl === item.googlePlacePhoto;
+      if (item.imageUrl && isGooglePhotoUrl(item.imageUrl)) {
+        updates.imageUrl = await photoToDataUrl(item.imageUrl);
+      }
+      if (item.googlePlacePhoto && isGooglePhotoUrl(item.googlePlacePhoto)) {
+        updates.googlePlacePhoto = sameUrl && updates.imageUrl
+          ? updates.imageUrl
+          : await photoToDataUrl(item.googlePlacePhoto);
+      }
+      return updates;
+    })
+  );
+
+  return results;
 }
 
 export function getCategoryFromTypes(types: string[]): 'transport' | 'food' | 'activity' | 'accommodation' | 'other' {
