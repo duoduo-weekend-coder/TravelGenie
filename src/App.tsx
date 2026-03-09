@@ -43,7 +43,7 @@ function loadItineraryTabs(): ItineraryTab[] {
 }
 
 function App() {
-  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule } = useTripStore();
+  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule } = useTripStore();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null);
   const [highlightedItemId, setHighlightedItemId] = useState<string | undefined>();
@@ -388,6 +388,28 @@ function App() {
             <button className="import-btn" onClick={() => setShowImport(true)}>
               Import Places
             </button>
+            <button
+              className="export-btn"
+              onClick={() => {
+                const json = JSON.stringify(trip, null, 2);
+                navigator.clipboard.writeText(json).then(
+                  () => alert('Trip JSON copied to clipboard!'),
+                  () => {
+                    // Fallback: download as file
+                    const blob = new Blob([json], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${trip.title.replace(/\s+/g, '-')}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                );
+              }}
+              title="Copy trip data as JSON (paste into src/demoTrip.ts to set as default)"
+            >
+              📋 Export Trip
+            </button>
           </div>
         </div>
       </header>
@@ -476,6 +498,23 @@ function App() {
           onClose={() => setShowScheduleImport(false)}
           scheduleOnly
         />
+      )}
+      {planExplanation && (
+        <div className="modal-overlay" onClick={() => setPlanExplanation(null)}>
+          <div className="modal plan-explanation-modal" onClick={e => e.stopPropagation()}>
+            <h2>✨ AI Plan Explanation</h2>
+            <div className="plan-explanation-body">
+              {planExplanation.split('\n').map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button className="save-btn" onClick={() => setPlanExplanation(null)}>
+                Got it!
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {isApiKeyModalOpen && (
         <div className="modal-overlay" onClick={() => setIsApiKeyModalOpen(false)}>

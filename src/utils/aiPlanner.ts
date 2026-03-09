@@ -1,7 +1,12 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Trip } from '../types';
 
-export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Promise<Trip> {
+export interface PlanResult {
+  trip: Trip;
+  explanation: string;
+}
+
+export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Promise<PlanResult> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
@@ -53,7 +58,7 @@ export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Pro
       }))
     : null;
 
-  if (places.length === 0) return currentTrip;
+  if (places.length === 0) return { trip: currentTrip, explanation: '' };
 
   // 2. Construct Prompt
   const prompt = `
@@ -98,7 +103,8 @@ ${accommodationContext ? `
           "timeSlot": "am" | "pm",
           "order": number // 1-based order within the day
         }
-      ]
+      ],
+      "explanation": "A brief, friendly explanation (2-4 sentences per day) of why you organized the plan this way — geographic clustering, meal timing, opening hours, etc."
     }
   `;
 
@@ -153,14 +159,17 @@ ${accommodationContext ? `
     );
 
     return {
-      ...currentTrip,
-      days: newDays,
-      unassignedItems: remainingUnassigned
+      trip: {
+        ...currentTrip,
+        days: newDays,
+        unassignedItems: remainingUnassigned
+      },
+      explanation: parsed.explanation || '',
     };
 
   } catch (error) {
     console.error("Gemini Planning Failed:", error);
     alert("AI Planning failed. Please check your API key and try again.");
-    return currentTrip;
+    return { trip: currentTrip, explanation: '' };
   }
 }

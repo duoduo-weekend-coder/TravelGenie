@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trip, Day, AgendaItem, Category } from './types';
 import { ScheduleEntry } from './utils/scheduleParser';
 import { v4 as uuid } from 'uuid';
+import { demoTrip } from './demoTrip';
 
 const DEFAULT_ITINERARY_ID = 'default';
 const ACTIVE_ITINERARY_KEY = 'travel-active-itinerary-id';
@@ -13,16 +14,6 @@ function getActiveItineraryId(): string {
 function getTripStorageKey(itineraryId: string): string {
   return `travel-plan-data:${itineraryId}`;
 }
-
-const defaultTrip: Trip = {
-  id: uuid(),
-  title: 'My Trip',
-  startDate: new Date().toISOString().split('T')[0],
-  days: [
-    { id: uuid(), date: new Date().toISOString().split('T')[0], items: [] }
-  ],
-  unassignedItems: []
-};
 
 export const PLAN_LIST_ID = 'plan-list';
 
@@ -40,7 +31,7 @@ export function useTripStore() {
       if (!parsed.unassignedItems) parsed.unassignedItems = [];
       return parsed;
     }
-    return defaultTrip;
+    return structuredClone(demoTrip);
   });
 
   const [geminiKey, setGeminiKey] = useState<string>(() => {
@@ -48,6 +39,7 @@ export function useTripStore() {
   });
   const [isPlanning, setIsPlanning] = useState(false);
   const [planningError, setPlanningError] = useState<string | null>(null);
+  const [planExplanation, setPlanExplanation] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(trip));
@@ -60,11 +52,15 @@ export function useTripStore() {
   const autoPlan = async () => {
     setIsPlanning(true);
     setPlanningError(null);
+    setPlanExplanation(null);
     try {
       if (geminiKey) {
         console.log("Starting AI planning with key length:", geminiKey.length);
-        const newTrip = await planTripWithGemini(geminiKey, trip);
-        setTrip(newTrip);
+        const result = await planTripWithGemini(geminiKey, trip);
+        setTrip(result.trip);
+        if (result.explanation) {
+          setPlanExplanation(result.explanation);
+        }
       } else {
         console.log("Using basic heuristic planner");
         setTrip(prev => generateAutoPlan(prev));
@@ -524,6 +520,8 @@ export function useTripStore() {
     autoPlan,
     isPlanning,
     planningError,
+    planExplanation,
+    setPlanExplanation,
     clearDay,
     clearPlan,
     setDayLocation,

@@ -117,6 +117,21 @@ body {
   background: #4f46e5;
 }
 
+.export-btn {
+  padding: 6px 14px;
+  background: white;
+  color: #6366f1;
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.export-btn:hover {
+  background: #eef2ff;
+}
+
 .auto-plan-btn {
   padding: 6px 14px;
   background: linear-gradient(135deg, #a855f7, #6366f1);
@@ -1001,6 +1016,27 @@ body {
 .modal-actions .save-btn:disabled {
   background: #9ca3af;
   cursor: not-allowed;
+}
+
+.plan-explanation-modal {
+  max-width: 600px;
+}
+
+.plan-explanation-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.plan-explanation-body p {
+  margin: 0 0 8px;
+}
+
+.plan-explanation-body p:empty {
+  display: none;
 }
 
 /* ========= Import Modal ========= */
