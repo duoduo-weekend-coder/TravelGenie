@@ -17,7 +17,13 @@ import { EditModal } from './components/EditModal';
 import { ImportModal } from './components/ImportModal';
 import { MapPanel } from './components/MapPanel';
 import { MapItem } from './dayColors';
+import { START_HOUR } from './components/TimeRuler';
 import { v4 as uuid } from 'uuid';
+
+const AM_END_HOUR = 12;
+const PM_END_HOUR = 22;
+const MIN_CARD_HEIGHT = 66;
+const MIN_PIXELS_PER_HOUR = 40;
 
 const ITINERARY_TABS_KEY = 'travel-itineraries';
 const ACTIVE_ITINERARY_KEY = 'travel-active-itinerary-id';
@@ -96,6 +102,17 @@ function App() {
     switchItinerary(newTab.id);
   };
 
+  const deleteItinerary = (tabId: string) => {
+    if (itineraryTabs.length <= 1) return;
+    if (!window.confirm('Delete this itinerary? This cannot be undone.')) return;
+    localStorage.removeItem(`travel-plan-data:${tabId}`);
+    setItineraryTabs(prev => prev.filter(t => t.id !== tabId));
+    if (activeItineraryId === tabId) {
+      const remaining = itineraryTabs.filter(t => t.id !== tabId);
+      switchItinerary(remaining[0].id);
+    }
+  };
+
   const handleImportTrip = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -138,6 +155,20 @@ function App() {
     }),
     ...trip.unassignedItems.map(item => ({ ...item, dayIndex: undefined, dayId: undefined }))
   ];
+
+  // Compute pixelsPerHour so cards don't overlap on the time axis
+  const pixelsPerHour = (() => {
+    let maxNeeded = MIN_PIXELS_PER_HOUR;
+    const amHours = AM_END_HOUR - START_HOUR;  // 6
+    const pmHours = PM_END_HOUR - AM_END_HOUR; // 10
+    for (const day of trip.days) {
+      const amCount = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot !== 'pm').length;
+      const pmCount = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot === 'pm').length;
+      if (amCount > 0) maxNeeded = Math.max(maxNeeded, (amCount * MIN_CARD_HEIGHT) / amHours);
+      if (pmCount > 0) maxNeeded = Math.max(maxNeeded, (pmCount * MIN_CARD_HEIGHT) / pmHours);
+    }
+    return Math.ceil(maxNeeded);
+  })();
 
   const handleAutoPlanClick = () => {
     if (!geminiKey) {
@@ -358,13 +389,23 @@ function App() {
             <h1>{trip.title}</h1>
             <div className="itinerary-tabs">
               {itineraryTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  className={`itinerary-tab ${tab.id === activeItineraryId ? 'active' : ''}`}
-                  onClick={() => switchItinerary(tab.id)}
-                >
-                  {tab.name}
-                </button>
+                <div key={tab.id} className={`itinerary-tab ${tab.id === activeItineraryId ? 'active' : ''}`}>
+                  <button
+                    className="itinerary-tab-label"
+                    onClick={() => switchItinerary(tab.id)}
+                  >
+                    {tab.name}
+                  </button>
+                  {itineraryTabs.length > 1 && (
+                    <button
+                      className="itinerary-tab-delete"
+                      onClick={(e) => { e.stopPropagation(); deleteItinerary(tab.id); }}
+                      title="Delete itinerary"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               ))}
               <button className="itinerary-tab add" onClick={createItinerary}>+ Itinerary</button>
             </div>
@@ -491,6 +532,7 @@ function App() {
                 }}
                 onDateChange={(newDate) => updateDayDate(day.id, newDate)}
                 hasClipboard={!!clipboard}
+                pixelsPerHour={pixelsPerHour}
               />
             ))}
             <button className="add-day-btn" onClick={addDay}>

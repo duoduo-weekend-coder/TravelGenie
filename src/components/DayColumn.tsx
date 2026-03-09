@@ -3,13 +3,12 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Day, AgendaItem } from '../types';
 import { AgendaCard } from './AgendaCard';
-import { TimeRuler, START_HOUR, PIXELS_PER_HOUR, RULER_HEIGHT } from './TimeRuler';
+import { TimeRuler, START_HOUR, getRulerHeight } from './TimeRuler';
 import { getDayColor } from '../dayColors';
 
 const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
-const AM_HEIGHT = (AM_END_HOUR - START_HOUR) * PIXELS_PER_HOUR;   // 6:00–12:00
-const PM_HEIGHT = (PM_END_HOUR - AM_END_HOUR) * PIXELS_PER_HOUR;  // 12:00–22:00
+const MIN_CARD_HEIGHT = 66; // minimum px reserved per card to prevent overlap
 
 interface Props {
   day: Day;
@@ -28,9 +27,10 @@ interface Props {
   onDeleteDay: () => void;
   onDateChange: (newDate: string) => void;
   hasClipboard: boolean;
+  pixelsPerHour: number;
 }
 
-export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayClick, onItemClick, onAddItem, onPasteDay, onClearDay, onSetDayLocation, onAddBlockedPeriod, onRemoveBlockedPeriod, onDeleteDay, onDateChange, hasClipboard }: Props) {
+export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayClick, onItemClick, onAddItem, onPasteDay, onClearDay, onSetDayLocation, onAddBlockedPeriod, onRemoveBlockedPeriod, onDeleteDay, onDateChange, hasClipboard, pixelsPerHour }: Props) {
   const amItems = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot !== 'pm');
   const pmItems = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot === 'pm');
   const hotelItems = day.items.filter(i => i.category === 'accommodation');
@@ -42,6 +42,10 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
   const endDropId = `${day.id}:end`;
 
   const [isEditingDate, setIsEditingDate] = useState(false);
+
+  const rulerHeight = getRulerHeight(pixelsPerHour);
+  const amHeight = (AM_END_HOUR - START_HOUR) * pixelsPerHour;
+  const pmHeight = (PM_END_HOUR - AM_END_HOUR) * pixelsPerHour;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T00:00:00');
@@ -58,9 +62,9 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
         <div className="day-column-title">
           <span className="day-label" style={{ color: getDayColor(dayIndex) }}>Day {dayIndex + 1}</span>
           {isEditingDate ? (
-            <input 
-              type="date" 
-              value={day.date} 
+            <input
+              type="date"
+              value={day.date}
               className="day-date-edit"
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => onDateChange(e.target.value)}
@@ -69,8 +73,8 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
               autoFocus
             />
           ) : (
-            <span 
-              className="day-date" 
+            <span
+              className="day-date"
               onClick={(e) => { e.stopPropagation(); setIsEditingDate(true); }}
               title="Click to edit date"
             >
@@ -106,7 +110,7 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
           )}
         </div>
       </div>
-      
+
       <StartEndZone
         id={startDropId}
         label="START"
@@ -120,11 +124,12 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
              blockedPeriods={day.blockedPeriods || []}
              onAddBlockedPeriod={onAddBlockedPeriod}
              onRemoveBlockedPeriod={onRemoveBlockedPeriod}
+             pixelsPerHour={pixelsPerHour}
            />
         </div>
-        <div className="day-zones-col" style={{ height: RULER_HEIGHT }}>
-          <DropZone id={amDropId} label="AM" items={amItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={AM_HEIGHT} zoneStartHour={START_HOUR} />
-          <DropZone id={pmDropId} label="PM" items={pmItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={PM_HEIGHT} zoneStartHour={AM_END_HOUR} />
+        <div className="day-zones-col" style={{ height: rulerHeight }}>
+          <DropZone id={amDropId} label="AM" items={amItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={amHeight} zoneStartHour={START_HOUR} pixelsPerHour={pixelsPerHour} />
+          <DropZone id={pmDropId} label="PM" items={pmItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={pmHeight} zoneStartHour={AM_END_HOUR} pixelsPerHour={pixelsPerHour} />
           <DropZone id={hotelDropId} label="🏠" items={hotelItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} className="accommodation-row" dayDate={day.date} />
         </div>
       </div>
@@ -152,7 +157,7 @@ interface StartEndZoneProps {
 
 function StartEndZone({ id, label, item, onClear }: Omit<StartEndZoneProps, 'dayDate' | 'isStart'>) {
   const { setNodeRef, isOver } = useDroppable({ id });
-  
+
   return (
     <div ref={setNodeRef} className={`drop-zone start-end-zone ${isOver ? 'drop-zone-over' : ''} ${item ? 'filled' : ''}`}>
       {!item && <span className="zone-label-placeholder">{label}</span>}
@@ -177,6 +182,7 @@ interface DropZoneProps {
   dayDate?: string;
   zoneHeight?: number;
   zoneStartHour?: number;
+  pixelsPerHour?: number;
 }
 
 function parseItemStartHour(item: AgendaItem): number | null {
@@ -186,7 +192,7 @@ function parseItemStartHour(item: AgendaItem): number | null {
   return parseInt(match[1], 10) + parseInt(match[2], 10) / 60;
 }
 
-function DropZone({ id, label, items, highlightedItemId, onItemClick, className, dayDate, zoneHeight, zoneStartHour }: DropZoneProps) {
+function DropZone({ id, label, items, highlightedItemId, onItemClick, className, dayDate, zoneHeight, zoneStartHour, pixelsPerHour }: DropZoneProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   // Sort items by their start time when we have time info
@@ -201,44 +207,64 @@ function DropZone({ id, label, items, highlightedItemId, onItemClick, className,
       })
     : items;
 
-  const useTimePositioning = zoneStartHour != null && zoneHeight;
+  const useTimePositioning = zoneStartHour != null && zoneHeight && pixelsPerHour;
+
+  // Compute positions with overlap prevention
+  let positions: { item: AgendaItem; top: number }[] | null = null;
+  if (useTimePositioning) {
+    positions = [];
+    let bottomEdge = 0; // tracks the bottom of the last positioned card
+    for (const item of sortedItems) {
+      const startH = parseItemStartHour(item);
+      if (startH != null) {
+        const idealTop = (startH - zoneStartHour!) * pixelsPerHour!;
+        // Push down if it would overlap the previous card
+        const top = Math.max(idealTop, bottomEdge);
+        positions.push({ item, top });
+        bottomEdge = top + MIN_CARD_HEIGHT;
+      } else {
+        // Items without a time: stack after the last positioned item
+        positions.push({ item, top: bottomEdge });
+        bottomEdge += MIN_CARD_HEIGHT;
+      }
+    }
+  }
+
+  // If items overflow the zone, expand to fit
+  const contentHeight = positions && positions.length > 0
+    ? positions[positions.length - 1].top + MIN_CARD_HEIGHT
+    : 0;
+  const effectiveHeight = zoneHeight ? Math.max(zoneHeight, contentHeight) : undefined;
 
   return (
     <div
       ref={setNodeRef}
       className={`drop-zone ${className || ''} ${isOver ? 'drop-zone-over' : ''}`}
-      style={zoneHeight ? { minHeight: zoneHeight, height: zoneHeight, position: 'relative' } : undefined}
+      style={effectiveHeight ? { minHeight: effectiveHeight, height: effectiveHeight, position: 'relative' } : undefined}
     >
       <span className="zone-label">{label}</span>
       <SortableContext items={sortedItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
-        {sortedItems.map(item => {
-          if (useTimePositioning) {
-            const startH = parseItemStartHour(item);
-            if (startH != null) {
-              const top = (startH - zoneStartHour!) * PIXELS_PER_HOUR;
-              return (
-                <div key={item.id} style={{ position: 'absolute', left: 8, right: 8, top: Math.max(0, top) }}>
-                  <AgendaCard
-                    item={item}
-                    onClick={() => onItemClick(item)}
-                    isHighlighted={item.id === highlightedItemId}
-                    dayDate={dayDate}
-                  />
-                </div>
-              );
-            }
-          }
-
-          return (
-            <AgendaCard
-              key={item.id}
-              item={item}
-              onClick={() => onItemClick(item)}
-              isHighlighted={item.id === highlightedItemId}
-              dayDate={dayDate}
-            />
-          );
-        })}
+        {positions
+          ? positions.map(({ item, top }) => (
+              <div key={item.id} style={{ position: 'absolute', left: 8, right: 8, top: Math.max(0, top) }}>
+                <AgendaCard
+                  item={item}
+                  onClick={() => onItemClick(item)}
+                  isHighlighted={item.id === highlightedItemId}
+                  dayDate={dayDate}
+                />
+              </div>
+            ))
+          : sortedItems.map(item => (
+              <AgendaCard
+                key={item.id}
+                item={item}
+                onClick={() => onItemClick(item)}
+                isHighlighted={item.id === highlightedItemId}
+                dayDate={dayDate}
+              />
+            ))
+        }
       </SortableContext>
     </div>
   );

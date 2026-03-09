@@ -4,23 +4,29 @@ interface Props {
   blockedPeriods: { start: string; end: string }[];
   onAddBlockedPeriod: (start: string, end: string) => void;
   onRemoveBlockedPeriod: (index: number) => void;
+  pixelsPerHour: number;
 }
 
 export const START_HOUR = 6; // 6 AM
 export const END_HOUR = 24; // Midnight
 export const TOTAL_MINUTES = (END_HOUR - START_HOUR) * 60;
-export const PIXELS_PER_HOUR = 20; // Compact but usable
-export const RULER_HEIGHT = (END_HOUR - START_HOUR) * PIXELS_PER_HOUR;
+export const DEFAULT_PIXELS_PER_HOUR = 20;
 
-export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedPeriod }: Props) {
+export function getRulerHeight(pixelsPerHour: number) {
+  return (END_HOUR - START_HOUR) * pixelsPerHour;
+}
+
+export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedPeriod, pixelsPerHour }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartY, setDragStartY] = useState<number | null>(null);
   const [currentY, setCurrentY] = useState<number | null>(null);
 
+  const rulerHeight = getRulerHeight(pixelsPerHour);
+
   const yToTime = (y: number) => {
-    const clampedY = Math.max(0, Math.min(y, RULER_HEIGHT));
-    const minutesFromStart = (clampedY / RULER_HEIGHT) * TOTAL_MINUTES;
+    const clampedY = Math.max(0, Math.min(y, rulerHeight));
+    const minutesFromStart = (clampedY / rulerHeight) * TOTAL_MINUTES;
     const totalMinutes = (START_HOUR * 60) + minutesFromStart;
     const hours = Math.floor(totalMinutes / 60);
     const mins = Math.floor(totalMinutes % 60);
@@ -34,7 +40,7 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return; // Left click only
     if (!containerRef.current) return;
-    
+
     const rect = containerRef.current.getBoundingClientRect();
     const y = e.clientY - rect.top;
     setDragStartY(y);
@@ -52,7 +58,7 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
     if (isDragging && dragStartY !== null && currentY !== null) {
       const startY = Math.min(dragStartY, currentY);
       const endY = Math.max(dragStartY, currentY);
-      
+
       // Minimum drag threshold (e.g. 5px) to avoid accidental clicks
       if (endY - startY > 5) {
         const startTime = yToTime(startY);
@@ -61,7 +67,7 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
           onAddBlockedPeriod(startTime, endTime);
         }
       }
-      
+
       setIsDragging(false);
       setDragStartY(null);
       setCurrentY(null);
@@ -76,13 +82,13 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
   const timeToY = (timeStr: string) => {
     const [h, m] = timeStr.split(':').map(Number);
     const minutesFromStart = (h * 60 + m) - (START_HOUR * 60);
-    return (minutesFromStart / TOTAL_MINUTES) * RULER_HEIGHT;
+    return (minutesFromStart / TOTAL_MINUTES) * rulerHeight;
   };
 
   return (
-    <div 
-      className="time-ruler-container" 
-      style={{ height: RULER_HEIGHT }}
+    <div
+      className="time-ruler-container"
+      style={{ height: rulerHeight }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -93,7 +99,7 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
       {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, i) => {
         const hour = START_HOUR + i;
         return (
-          <div key={hour} className="ruler-hour-marker" style={{ top: i * PIXELS_PER_HOUR }}>
+          <div key={hour} className="ruler-hour-marker" style={{ top: i * pixelsPerHour }}>
             <span className="ruler-hour-label">{hour}</span>
             <div className="ruler-tick" />
           </div>
@@ -105,9 +111,9 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
         const top = timeToY(bp.start);
         const bottom = timeToY(bp.end);
         const height = Math.max(2, bottom - top); // Ensure at least 2px visible
-        
+
         return (
-          <div 
+          <div
             key={idx}
             className="ruler-block"
             style={{ top, height }}
@@ -122,11 +128,11 @@ export function TimeRuler({ blockedPeriods, onAddBlockedPeriod, onRemoveBlockedP
 
       {/* Drag Preview */}
       {isDragging && dragStartY !== null && currentY !== null && (
-        <div 
+        <div
           className="ruler-drag-preview"
-          style={{ 
-            top: Math.min(dragStartY, currentY), 
-            height: Math.abs(currentY - dragStartY) 
+          style={{
+            top: Math.min(dragStartY, currentY),
+            height: Math.abs(currentY - dragStartY)
           }}
         />
       )}

@@ -55,13 +55,41 @@ body {
 }
 
 .itinerary-tab {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid #d1d5db;
   background: #ffffff;
   color: #4b5563;
   border-radius: 999px;
-  padding: 4px 10px;
+  padding: 0;
   font-size: 12px;
   cursor: pointer;
+}
+
+.itinerary-tab-label {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.itinerary-tab-delete {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px 2px 0;
+  cursor: pointer;
+  border-radius: 0 999px 999px 0;
+}
+
+.itinerary-tab-delete:hover {
+  color: #ef4444;
 }
 
 .itinerary-tab.active {
@@ -73,6 +101,7 @@ body {
 
 .itinerary-tab.add {
   border-style: dashed;
+  padding: 4px 10px;
 }
 
 .header-actions {
@@ -451,7 +480,6 @@ body {
 .day-body-row {
   display: flex;
   flex: 1;
-  min-height: 360px;
   position: relative;
 }
 
@@ -470,7 +498,6 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow: hidden;
 }
 
 .time-ruler-container {
@@ -584,7 +611,7 @@ body {
   min-height: 40px;
   border-bottom: 1px solid #f3f4f6;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .drop-zone .zone-label {

@@ -37,14 +37,31 @@ export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Pro
       .filter(i => i.category === 'accommodation')
       .map(i => ({ name: i.title, lat: i.lat, lng: i.lng }));
 
+    // Include existing non-accommodation items already scheduled on this day
+    const existingItems = day.items
+      .filter(i => i.category !== 'accommodation')
+      .map(i => ({
+        name: i.title,
+        time: i.time,
+        timeSlot: i.timeSlot,
+        category: i.category,
+        suggestedDuration: i.suggestedDuration,
+      }));
+
+    // Day of week for opening hours reference (0=Sun, 1=Mon, ...)
+    const dateObj = new Date(day.date + 'T00:00:00');
+    const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dateObj.getDay()];
+
     return {
       dayId: day.id,
       dayIndex: index + 1,
       date: day.date,
+      dayOfWeek,
       startLocation: day.startLocation ? { name: day.startLocation.title, lat: day.startLocation.lat, lng: day.startLocation.lng } : null,
       endLocation: day.endLocation ? { name: day.endLocation.title, lat: day.endLocation.lat, lng: day.endLocation.lng } : null,
       accommodation: dayAccommodations.length > 0 ? dayAccommodations[0] : null,
-      blockedPeriods: day.blockedPeriods,
+      blockedPeriods: day.blockedPeriods || [],
+      existingItems,
     };
   });
 
@@ -65,29 +82,48 @@ export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Pro
     You are an expert travel planner. I have a list of places to visit and a ${days.length}-day trip itinerary.
     Please assign the places to the days to create a logical, efficient travel plan.
 
-    **Constraints & Rules:**
-    1. **Geography**: Group places that are physically close to each other in the same day. Minimize travel time.
-    2. **Anchors**:
+    **Constraints & Rules (in priority order):**
+
+    1. **BLOCKED TIME (CRITICAL)**: Some days have 'blockedPeriods' (HH:MM - HH:MM) AND 'existingItems' already scheduled.
+       - You MUST NOT schedule any new activities that overlap with blocked periods.
+       - You MUST NOT schedule during times already occupied by existing items.
+       - Plan around these constraints — use the remaining free time windows only.
+
+    2. **OPENING HOURS (CRITICAL)**: Each place may have 'openingHours' listing hours per weekday (e.g. "Monday: 9:00 AM – 5:00 PM", "Tuesday: Closed").
+       - Each day has a 'date' and 'dayOfWeek' field. Cross-reference the place's opening hours with the specific day's weekday.
+       - Do NOT assign a place to a day when it is CLOSED on that weekday.
+       - If a place is closed on one day but open on another, move it to the open day.
+       - If a place is closed on ALL available days, leave it unassigned.
+
+    3. **Geography**: Group places that are physically close to each other on the same day. Minimize travel time.
+       - **OUTLIER DETECTION**: If a place's lat/lng is very far from the main cluster of places (e.g. in a different city or region), DROP it — leave it unassigned. It's better to skip an outlier than waste a whole day traveling to it.
+
+    4. **Anchors**:
        - If a day has a 'startLocation', the first activity should be near it.
        - If a day has an 'endLocation', the last activity should be near it.
-    3. **Accommodations**:
+
+    5. **Accommodations**:
        - Some days have an 'accommodation' field showing where the traveler is staying that night.
-       - Use the accommodation location for geography: the last activities of the day should be near the accommodation so the traveler can easily return.
+       - The last activities of the day should be near the accommodation so the traveler can easily return.
        - Do NOT add accommodations as visit items. They are already handled separately.
-    4. **Time Slots**: Assign a 'timeSlot' ("am" or "pm") to each place.
+
+    6. **Time Slots**: Assign a 'timeSlot' ("am" or "pm") to each place.
        - "am": Morning to Early Afternoon (e.g. 08:00 - 14:00)
        - "pm": Late Afternoon to Evening (e.g. 14:00 - 22:00)
-    5. **Meals**: Try to identify breakfast/lunch/dinner spots (category: 'food') and place them appropriately.
-    6. **Opening Hours**: Use the provided opening hours text to avoid placing closed venues.
-    7. **Capacity & Pacing**:
-       - Don't overcrowd days.
+       - Make sure the chosen time slot does not overlap with any blocked period or existing item in that slot.
+
+    7. **Meals**: Try to identify breakfast/lunch/dinner spots (category: 'food') and place them at appropriate meal times.
+
+    8. **Capacity & Pacing**:
+       - Don't overcrowd days. Account for travel time between places.
        - Respect the 'suggestedDuration' (in minutes) for each place.
-       - **BLOCKED TIME**: Some days have 'blockedPeriods' (HH:MM - HH:MM). Do NOT plan activities during these times. Adjust the plan around them.
-    8. **Unassigned**: If a place really doesn't fit or there isn't time, you can leave it out.
+       - After subtracting blocked periods and existing items, only schedule what fits in the remaining free time.
+
+    9. **Unassigned**: If a place really doesn't fit (no time, closed all days, geographic outlier), leave it out of assignments.
 
     **Input Data:**
 
-    Days (with accommodation and blocked times): ${JSON.stringify(days, null, 2)}
+    Days (with existing schedule, blocked times, and accommodation): ${JSON.stringify(days, null, 2)}
 ${accommodationContext ? `
     Traveler's Accommodations (for geography reference only — do NOT assign these): ${JSON.stringify(accommodationContext, null, 2)}
 ` : ''}
@@ -101,10 +137,16 @@ ${accommodationContext ? `
           "placeId": "string",
           "dayId": "string",
           "timeSlot": "am" | "pm",
-          "order": number // 1-based order within the day
+          "order": number // 1-based order within the day (accounting for existing items)
         }
       ],
-      "explanation": "A brief, friendly explanation (2-4 sentences per day) of why you organized the plan this way — geographic clustering, meal timing, opening hours, etc."
+      "dropped": [
+        {
+          "placeId": "string",
+          "reason": "string" // e.g. "closed on all available days", "too far from other places"
+        }
+      ],
+      "explanation": "A brief, friendly explanation (2-4 sentences per day) of why you organized the plan this way — geographic clustering, meal timing, opening hours, blocked time avoidance, etc."
     }
   `;
 
@@ -113,7 +155,7 @@ ${accommodationContext ? `
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    
+
     // Clean markdown if present
     const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(jsonStr);
@@ -153,6 +195,13 @@ ${accommodationContext ? `
       });
     });
 
+    // Build explanation including dropped places
+    let explanation = parsed.explanation || '';
+    if (parsed.dropped && parsed.dropped.length > 0) {
+      const droppedLines = parsed.dropped.map((d: any) => `• ${visitItems.find(i => i.id === d.placeId)?.title || d.placeId}: ${d.reason}`);
+      explanation += '\n\nDropped places:\n' + droppedLines.join('\n');
+    }
+
     // Keep accommodations and unassigned visit items in the unassigned list
     const remainingUnassigned = unassigned.filter(i =>
       i.category === 'accommodation' || !assignedIds.has(i.id)
@@ -164,7 +213,7 @@ ${accommodationContext ? `
         days: newDays,
         unassignedItems: remainingUnassigned
       },
-      explanation: parsed.explanation || '',
+      explanation,
     };
 
   } catch (error) {
