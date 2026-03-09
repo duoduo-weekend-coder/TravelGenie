@@ -282,7 +282,8 @@ export function useTripStore() {
     destId: string,
     itemId: string,
     newIndex: number,
-    timeSlot?: 'am' | 'pm'
+    timeSlot?: 'am' | 'pm',
+    time?: string
   ) => {
     setTrip(prev => {
       // Find the item from source
@@ -295,8 +296,12 @@ export function useTripStore() {
       }
       if (!item) return prev;
 
-      // Apply timeSlot if provided
-      const movedItem = timeSlot !== undefined ? { ...item, timeSlot } : item;
+      // Apply timeSlot and time if provided
+      const movedItem = {
+        ...item,
+        ...(timeSlot !== undefined ? { timeSlot } : {}),
+        ...(time !== undefined ? { time } : {}),
+      };
 
       // Remove from source
       let newUnassigned = prev.unassignedItems;

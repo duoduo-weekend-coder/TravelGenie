@@ -244,6 +244,26 @@ function App() {
     let destId: string;
     let newIndex = 0;
     let timeSlot: 'am' | 'pm' | undefined;
+    let dropTime: string | undefined;
+
+    // Helper: compute time from drop position within a zone
+    const computeDropTime = (zone: 'am' | 'pm') => {
+      const activeRect = active.rect.current.translated;
+      if (!activeRect || !over.rect) return;
+      const zoneStartHour = zone === 'am' ? START_HOUR : AM_END_HOUR;
+      const relativeY = activeRect.top - over.rect.top;
+      const dropHour = zoneStartHour + relativeY / pixelsPerHour;
+      // Round to nearest 15 minutes
+      const totalMin = Math.round(dropHour * 60 / 15) * 15;
+      const zoneEndHour = zone === 'am' ? AM_END_HOUR : PM_END_HOUR;
+      const clampedMin = Math.max(zoneStartHour * 60, Math.min(totalMin, (zoneEndHour - 1) * 60 + 45));
+      let h = Math.floor(clampedMin / 60);
+      const m = clampedMin % 60;
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      if (h > 12) h -= 12;
+      if (h === 0) h = 12;
+      dropTime = `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+    };
 
     if (overId === PLAN_LIST_ID) {
       // Dropped on plan list
@@ -251,7 +271,7 @@ function App() {
     } else if (overId.includes(':')) {
       // Dropped on a zone like "dayId:am" or "dayId:pm" or "dayId:hotel" or "dayId:start"
       const [dayId, zone] = overId.split(':');
-      
+
       if (zone === 'start' || zone === 'end') {
          // Special handling for Start/End zones: Clone the item there
          let itemToClone: AgendaItem | undefined;
@@ -261,18 +281,23 @@ function App() {
             const sDay = trip.days.find(d => d.items.some(i => i.id === activeId));
             itemToClone = sDay?.items.find(i => i.id === activeId);
          }
-         
+
          if (itemToClone) {
             // Remove timeSlot/notes to clean up
-            const { id, timeSlot, ...rest } = itemToClone; 
+            const { id, timeSlot, ...rest } = itemToClone;
             setDayLocation(dayId, zone as 'start' | 'end', rest);
          }
          return; // Done, don't move the original item
       }
 
       destId = dayId;
-      if (zone === 'am') timeSlot = 'am';
-      else if (zone === 'pm') timeSlot = 'pm';
+      if (zone === 'am') {
+        timeSlot = 'am';
+        computeDropTime('am');
+      } else if (zone === 'pm') {
+        timeSlot = 'pm';
+        computeDropTime('pm');
+      }
       // hotel zone: no timeSlot change, category handles it
       const targetDay = trip.days.find(d => d.id === dayId);
       if (targetDay) {
@@ -303,12 +328,7 @@ function App() {
       }
     }
 
-    if (sourceId === destId! && sourceId !== PLAN_LIST_ID) {
-      // Same day — still move to update timeSlot or reorder
-      moveItem(sourceId, destId!, activeId, newIndex, timeSlot);
-    } else {
-      moveItem(sourceId, destId!, activeId, newIndex, timeSlot);
-    }
+    moveItem(sourceId, destId!, activeId, newIndex, timeSlot, dropTime);
   };
 
   const handleAddItem = (dayId: string) => {

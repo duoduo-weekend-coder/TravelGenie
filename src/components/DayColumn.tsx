@@ -187,9 +187,15 @@ interface DropZoneProps {
 
 function parseItemStartHour(item: AgendaItem): number | null {
   if (!item.time) return null;
-  const match = item.time.match(/^(\d{1,2}):(\d{2})/);
+  // Handle "9:00 AM", "2:00 PM", "14:30", "9:00 AM - 11:00 AM", etc.
+  const match = item.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
   if (!match) return null;
-  return parseInt(match[1], 10) + parseInt(match[2], 10) / 60;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const ampm = match[3]?.toUpperCase();
+  if (ampm === 'PM' && hours !== 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+  return hours + minutes / 60;
 }
 
 function DropZone({ id, label, items, highlightedItemId, onItemClick, className, dayDate, zoneHeight, zoneStartHour, pixelsPerHour }: DropZoneProps) {
