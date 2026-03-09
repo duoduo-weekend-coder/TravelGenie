@@ -107,19 +107,28 @@ export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Pro
        - The last activities of the day should be near the accommodation so the traveler can easily return.
        - Do NOT add accommodations as visit items. They are already handled separately.
 
-    6. **Time Slots**: Assign a 'timeSlot' ("am" or "pm") to each place.
-       - "am": Morning to Early Afternoon (e.g. 08:00 - 14:00)
-       - "pm": Late Afternoon to Evening (e.g. 14:00 - 22:00)
+    6. **DAYTIME ONLY (CRITICAL)**: All sightseeing, activities, and visits MUST be scheduled during daytime hours.
+       - Activities/visits (category: 'activity', 'transport', 'other') must END by 19:00 (7 PM) at the latest.
+       - Dinner (category: 'food' at dinner time) can be scheduled up to 21:00 (9 PM).
+       - Do NOT schedule any visiting or sightseeing after 19:00. Evenings are for dinner and rest only.
+
+    7. **Time Slots**: Assign a 'timeSlot' ("am" or "pm") to each place.
+       - "am": Morning to Early Afternoon (e.g. 08:00 - 13:00)
+       - "pm": Afternoon to Early Evening (e.g. 13:00 - 19:00 for visits, up to 21:00 for dinner)
        - Make sure the chosen time slot does not overlap with any blocked period or existing item in that slot.
 
-    7. **Meals**: Try to identify breakfast/lunch/dinner spots (category: 'food') and place them at appropriate meal times.
+    8. **Meals**: Try to identify breakfast/lunch/dinner spots (category: 'food') and place them at appropriate meal times.
+       - Breakfast: around 08:00 - 09:00
+       - Lunch: around 12:00 - 13:30
+       - Dinner: around 18:00 - 20:00 (this is the ONLY type of activity allowed after 19:00)
 
-    8. **Capacity & Pacing**:
+    9. **Capacity & Pacing**:
        - Don't overcrowd days. Account for travel time between places.
        - Respect the 'suggestedDuration' (in minutes) for each place.
        - After subtracting blocked periods and existing items, only schedule what fits in the remaining free time.
+       - Remember: the effective day for visits ends at 19:00, so plan accordingly.
 
-    9. **Unassigned**: If a place really doesn't fit (no time, closed all days, geographic outlier), leave it out of assignments.
+    10. **Unassigned**: If a place really doesn't fit (no time, closed all days, geographic outlier), leave it out of assignments.
 
     **Input Data:**
 
