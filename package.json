@@ -16,10 +16,12 @@
     "@google/generative-ai": "^0.24.1",
     "@vis.gl/react-google-maps": "^1.7.1",
     "kmeans-ts": "^1.0.4",
-    "playwright": "^1.58.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "uuid": "^9.0.0"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.58.2"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
