@@ -19,6 +19,7 @@ import { MapPanel } from './components/MapPanel';
 import { MapItem } from './dayColors';
 import { START_HOUR } from './components/TimeRuler';
 import { v4 as uuid } from 'uuid';
+import { savePhotos, stripPhotosForStorage } from './photoStore';
 
 const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
@@ -118,20 +119,49 @@ function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
+      let imported: any;
       try {
-        const imported = JSON.parse(reader.result as string);
-        if (!imported.title || !imported.days) {
-          alert('Invalid trip file: missing title or days.');
-          return;
-        }
-        const newId = uuid();
-        const newTab: ItineraryTab = { id: newId, name: imported.title };
-        localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(imported));
-        setItineraryTabs(prev => [...prev, newTab]);
-        switchItinerary(newId);
-      } catch {
+        // Strip BOM and surrounding whitespace
+        const text = (reader.result as string).replace(/^\uFEFF/, '').trim();
+        imported = JSON.parse(text);
+      } catch (parseErr) {
+        console.error('JSON parse error:', parseErr);
         alert('Could not parse trip file. Make sure it is valid JSON.');
+        return;
       }
+
+      if (!imported.title || !imported.days) {
+        alert('Invalid trip file: missing "title" or "days" field.');
+        return;
+      }
+
+      // Save photos to IndexedDB, then stripped trip to localStorage
+      const allItems = [
+        ...imported.days.flatMap((d: any) => d.items || []),
+        ...(imported.unassignedItems || []),
+      ];
+      savePhotos(allItems)
+        .catch(() => {}) // best-effort photo save
+        .finally(() => {
+          try {
+            const lightTrip = {
+              ...imported,
+              days: imported.days.map((day: any) => ({
+                ...day,
+                items: stripPhotosForStorage(day.items || []),
+              })),
+              unassignedItems: stripPhotosForStorage(imported.unassignedItems || []),
+            };
+            const newId = uuid();
+            const newTab: ItineraryTab = { id: newId, name: imported.title };
+            localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(lightTrip));
+            setItineraryTabs(prev => [...prev, newTab]);
+            switchItinerary(newId);
+          } catch (storageErr) {
+            console.error('Storage error:', storageErr);
+            alert('Failed to save trip — localStorage may be full. Try clearing old itineraries first.');
+          }
+        });
     };
     reader.readAsText(file);
     // Reset so the same file can be re-imported

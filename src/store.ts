@@ -4,6 +4,7 @@ import { ScheduleEntry } from './utils/scheduleParser';
 import { v4 as uuid } from 'uuid';
 import { demoTrip } from './demoTrip';
 import { migrateGooglePhotoUrls } from './googleMaps';
+import { savePhotos, loadPhotos, stripPhotosForStorage } from './photoStore';
 
 const DEFAULT_ITINERARY_ID = 'default';
 const ACTIVE_ITINERARY_KEY = 'travel-active-itinerary-id';
@@ -25,12 +26,16 @@ export function useTripStore() {
   const [storageKey] = useState<string>(() => getTripStorageKey(getActiveItineraryId()));
 
   const [trip, setTrip] = useState<Trip>(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Migrate old data that lacks unassignedItems
-      if (!parsed.unassignedItems) parsed.unassignedItems = [];
-      return parsed;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migrate old data that lacks unassignedItems
+        if (!parsed.unassignedItems) parsed.unassignedItems = [];
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to load trip from localStorage:', e);
     }
     return structuredClone(demoTrip);
   });
@@ -42,36 +47,86 @@ export function useTripStore() {
   const [planningError, setPlanningError] = useState<string | null>(null);
   const [planExplanation, setPlanExplanation] = useState<string | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(trip));
-  }, [trip, storageKey]);
-
-  // One-time migration: convert Google Places photo URLs to base64 data URLs
-  // to stop recurring billable Place Photos API calls on every render.
+  // Save trip to localStorage — strip base64 photos first (they go to IndexedDB).
   useEffect(() => {
     const allItems = [
       ...trip.days.flatMap(d => d.items),
       ...trip.unassignedItems,
     ];
-    migrateGooglePhotoUrls(allItems).then(migrated => {
-      if (migrated.length === 0) return;
-      const updateMap = new Map(migrated.map(m => [m.id, m]));
-      setTrip(prev => ({
-        ...prev,
-        days: prev.days.map(day => ({
+
+    // Save base64 photos to IndexedDB (large capacity)
+    savePhotos(allItems).catch(e => console.warn('Failed to save photos to IndexedDB:', e));
+
+    // Save trip to localStorage WITHOUT base64 photos (small capacity)
+    try {
+      const lightTrip = {
+        ...trip,
+        days: trip.days.map(day => ({
           ...day,
-          items: day.items.map(item => {
-            const u = updateMap.get(item.id);
-            return u ? { ...item, ...u } : item;
-          })
+          items: stripPhotosForStorage(day.items),
         })),
-        unassignedItems: prev.unassignedItems.map(item => {
-          const u = updateMap.get(item.id);
-          return u ? { ...item, ...u } : item;
-        })
-      }));
-      console.log(`Migrated ${migrated.length} Google photo URLs to data URLs`);
-    });
+        unassignedItems: stripPhotosForStorage(trip.unassignedItems),
+      };
+      localStorage.setItem(storageKey, JSON.stringify(lightTrip));
+    } catch (e) {
+      console.warn('Failed to save trip to localStorage:', e);
+    }
+  }, [trip, storageKey]);
+
+  // On mount: load photos from IndexedDB back into trip state.
+  useEffect(() => {
+    const allItems = [
+      ...trip.days.flatMap(d => d.items),
+      ...trip.unassignedItems,
+    ];
+    // Also migrate any old Google photo URLs to base64
+    migrateGooglePhotoUrls(allItems)
+      .then(migrated => {
+        if (migrated.length > 0) {
+          const updateMap = new Map(migrated.map(m => [m.id, m]));
+          setTrip(prev => ({
+            ...prev,
+            days: prev.days.map(day => ({
+              ...day,
+              items: day.items.map(item => {
+                const u = updateMap.get(item.id);
+                return u ? { ...item, ...u } : item;
+              })
+            })),
+            unassignedItems: prev.unassignedItems.map(item => {
+              const u = updateMap.get(item.id);
+              return u ? { ...item, ...u } : item;
+            })
+          }));
+        }
+      })
+      .catch(e => console.warn('Photo migration failed (non-fatal):', e));
+
+    // Load photos from IndexedDB and merge into trip state
+    loadPhotos(allItems)
+      .then(() => {
+        const photoMap = new Map(
+          allItems
+            .filter(i => i.imageUrl || i.googlePlacePhoto)
+            .map(i => [i.id, { imageUrl: i.imageUrl, googlePlacePhoto: i.googlePlacePhoto }])
+        );
+        if (photoMap.size === 0) return;
+        setTrip(prev => ({
+          ...prev,
+          days: prev.days.map(day => ({
+            ...day,
+            items: day.items.map(item => {
+              const p = photoMap.get(item.id);
+              return p ? { ...item, ...p } : item;
+            })
+          })),
+          unassignedItems: prev.unassignedItems.map(item => {
+            const p = photoMap.get(item.id);
+            return p ? { ...item, ...p } : item;
+          })
+        }));
+      })
+      .catch(e => console.warn('Failed to load photos from IndexedDB:', e));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

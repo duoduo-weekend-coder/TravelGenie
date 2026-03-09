@@ -183,7 +183,15 @@ export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | n
         types: place.types,
       };
 
-      // Write to cache
+      // Fetch photos + openingHours via the cheaper Place Details endpoint.
+      // One-time cost per place — results are cached as base64 data URLs.
+      const extras = await fetchPlaceExtras(place.id);
+      if (extras) {
+        if (extras.photos && extras.photos.length > 0) result.photos = extras.photos;
+        if (extras.openingHours) result.openingHours = extras.openingHours;
+      }
+
+      // Write to cache (with photos as base64)
       cache[normalizedQuery] = result;
       writePlaceCache(cache);
 
@@ -293,15 +301,17 @@ async function enrichPlace(place: PlaceDetails): Promise<PlaceDetails> {
   try {
     const enriched = await fetchPlaceDetails(place.name);
     if (enriched) {
+      // Fetch photos + openingHours via the cheaper Place Details endpoint
+      const extras = await fetchPlaceExtras(enriched.place_id);
       return {
         ...place,
-        photos: enriched.photos && enriched.photos.length > 0 ? enriched.photos : place.photos,
+        place_id: enriched.place_id,
+        photos: extras?.photos && extras.photos.length > 0 ? extras.photos : place.photos,
         types: enriched.types && enriched.types.length > 0 ? enriched.types : place.types,
         formatted_address: enriched.formatted_address || place.formatted_address,
         lat: place.lat ?? enriched.lat,
         lng: place.lng ?? enriched.lng,
-        openingHours: enriched.openingHours || place.openingHours,
-        reservable: enriched.reservable ?? place.reservable
+        openingHours: extras?.openingHours || place.openingHours,
       };
     }
   } catch (e) {
