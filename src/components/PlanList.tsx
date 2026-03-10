@@ -1,9 +1,30 @@
 import { useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { AgendaItem } from '../types';
+import { AgendaItem, Category } from '../types';
 import { PLAN_LIST_ID } from '../store';
 import { AgendaCard } from './AgendaCard';
+
+const ALL_CATEGORIES: Category[] = ['food', 'activity', 'transport', 'accommodation', 'other'];
+
+const CATEGORY_LABELS: Record<Category, string> = {
+  food: 'Food',
+  activity: 'Activity',
+  transport: 'Transport',
+  accommodation: 'Hotel',
+  other: 'Other',
+};
+
+/** Extract a short region token from a location string (first comma-segment, or the whole string). */
+function extractRegion(location: string): string {
+  // Try to grab the last meaningful segment (often the city/area)
+  // e.g. "123 Main St, Shibuya, Tokyo" → "Tokyo"
+  // e.g. "Shibuya" → "Shibuya"
+  const parts = location.split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return location.trim();
+  // Use the last segment as the region (typically city or country)
+  return parts[parts.length - 1];
+}
 
 interface Props {
   items: AgendaItem[];
@@ -17,18 +38,62 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
   const { setNodeRef, isOver } = useDroppable({ id: PLAN_LIST_ID });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [categoryFilter, setCategoryFilter] = useState<Category | null>(null);
+  const [regionFilter, setRegionFilter] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
   const selectMode = selected.size > 0;
 
+  // Derive available categories from items
+  const availableCategories = useMemo(() => {
+    const cats = new Set(items.map(i => i.category));
+    return ALL_CATEGORIES.filter(c => cats.has(c));
+  }, [items]);
+
+  // Derive available regions from item locations
+  const availableRegions = useMemo(() => {
+    const regionMap = new Map<string, number>(); // region → count
+    for (const item of items) {
+      if (item.location) {
+        const region = extractRegion(item.location);
+        if (region) {
+          regionMap.set(region, (regionMap.get(region) || 0) + 1);
+        }
+      }
+    }
+    // Sort by count descending, then alphabetically
+    return [...regionMap.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([region]) => region);
+  }, [items]);
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return items;
-    const q = search.toLowerCase();
-    return items.filter(item =>
-      item.title.toLowerCase().includes(q) ||
-      (item.location && item.location.toLowerCase().includes(q)) ||
-      (item.notes && item.notes.toLowerCase().includes(q)) ||
-      (item.category && item.category.toLowerCase().includes(q))
-    );
-  }, [items, search]);
+    let result = items;
+
+    if (categoryFilter) {
+      result = result.filter(item => item.category === categoryFilter);
+    }
+
+    if (regionFilter) {
+      const rf = regionFilter.toLowerCase();
+      result = result.filter(item =>
+        item.location && item.location.toLowerCase().includes(rf)
+      );
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(item =>
+        item.title.toLowerCase().includes(q) ||
+        (item.location && item.location.toLowerCase().includes(q)) ||
+        (item.notes && item.notes.toLowerCase().includes(q)) ||
+        (item.category && item.category.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [items, search, categoryFilter, regionFilter]);
+
+  const activeFilterCount = (categoryFilter ? 1 : 0) + (regionFilter ? 1 : 0);
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
@@ -55,6 +120,11 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
     }
   };
 
+  const clearFilters = () => {
+    setCategoryFilter(null);
+    setRegionFilter(null);
+  };
+
   return (
     <div className={`plan-list ${isOver ? 'plan-list-over' : ''}`}>
       <div className="plan-list-header">
@@ -71,6 +141,51 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          <div className="plan-list-filter-row">
+            <button
+              className={`filter-toggle-btn ${showFilters || activeFilterCount > 0 ? 'active' : ''}`}
+              onClick={() => setShowFilters(prev => !prev)}
+            >
+              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+            {activeFilterCount > 0 && (
+              <button className="filter-clear-btn" onClick={clearFilters}>Clear</button>
+            )}
+          </div>
+          {showFilters && (
+            <div className="plan-list-filters">
+              <div className="filter-group">
+                <label className="filter-label">Type</label>
+                <div className="filter-chips">
+                  {availableCategories.map(cat => (
+                    <button
+                      key={cat}
+                      className={`filter-chip ${categoryFilter === cat ? 'active' : ''}`}
+                      onClick={() => setCategoryFilter(prev => prev === cat ? null : cat)}
+                    >
+                      {CATEGORY_LABELS[cat]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {availableRegions.length > 0 && (
+                <div className="filter-group">
+                  <label className="filter-label">Region</label>
+                  <div className="filter-chips">
+                    {availableRegions.map(region => (
+                      <button
+                        key={region}
+                        className={`filter-chip ${regionFilter === region ? 'active' : ''}`}
+                        onClick={() => setRegionFilter(prev => prev === region ? null : region)}
+                      >
+                        {region}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="plan-list-bulk-actions">
             {selectMode ? (
               <>
@@ -122,7 +237,13 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
         )}
         {items.length > 0 && filtered.length === 0 && (
           <div className="plan-list-empty">
-            No matches for "{search}"
+            No matches{search ? ` for "${search}"` : ''}
+            {activeFilterCount > 0 && (
+              <>
+                <br />
+                <button className="filter-clear-link" onClick={clearFilters}>Clear filters</button>
+              </>
+            )}
           </div>
         )}
       </div>

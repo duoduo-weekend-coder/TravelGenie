@@ -15,12 +15,13 @@ import { PlanList } from './components/PlanList';
 import { DayColumn } from './components/DayColumn';
 import { EditModal } from './components/EditModal';
 import { ImportModal } from './components/ImportModal';
+import { XhsPanel } from './components/XhsPanel';
 import { MapPanel } from './components/MapPanel';
 import { MapItem } from './dayColors';
 import { START_HOUR } from './components/TimeRuler';
 import { v4 as uuid } from 'uuid';
 import { savePhotos, stripPhotosForStorage } from './photoStore';
-import { saveSharedTrip, loadSharedTrip, getShareIdFromUrl, clearShareIdFromUrl } from './utils/shareTrip';
+import { saveSharedTrip, loadSharedTrip, getShareIdFromUrl, clearShareIdFromUrl, setShareId } from './utils/shareTrip';
 
 const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
@@ -58,14 +59,27 @@ function App() {
   const [focusedDayId, setFocusedDayId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showXhsImport, setShowXhsImport] = useState(false);
   const [showScheduleImport, setShowScheduleImport] = useState(false);
   const [clipboard, setClipboard] = useState<AgendaItem[] | null>(null);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [showPlanList, setShowPlanList] = useState(true);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  const importMenuRef = useRef<HTMLDivElement>(null);
+  const fileMenuRef = useRef<HTMLDivElement>(null);
   const tripFileInputRef = useRef<HTMLInputElement>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [itineraryTabs, setItineraryTabs] = useState<ItineraryTab[]>(() => loadItineraryTabs());
   const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
     return localStorage.getItem(ACTIVE_ITINERARY_KEY) || 'default';
+  });
+  const [dayColumnWidths, setDayColumnWidths] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('travel-day-column-widths');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* ignore */ }
+    }
+    return {};
   });
   const [isSharing, setIsSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -77,9 +91,27 @@ function App() {
     console.log("Environment API Key:", import.meta.env.VITE_GEMINI_API_KEY ? "Loaded" : "Not Found");
   }, []);
 
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (importMenuRef.current && !importMenuRef.current.contains(e.target as Node)) {
+        setImportMenuOpen(false);
+      }
+      if (fileMenuRef.current && !fileMenuRef.current.contains(e.target as Node)) {
+        setFileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(ITINERARY_TABS_KEY, JSON.stringify(itineraryTabs));
   }, [itineraryTabs]);
+
+  useEffect(() => {
+    localStorage.setItem('travel-day-column-widths', JSON.stringify(dayColumnWidths));
+  }, [dayColumnWidths]);
 
   useEffect(() => {
     if (itineraryTabs.some(tab => tab.id === activeItineraryId)) {
@@ -116,6 +148,10 @@ function App() {
         };
         localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(lightTrip));
         setItineraryTabs(prev => [...prev, newTab]);
+
+        // Link the original shareId to this new local itinerary
+        // so re-sharing overwrites the same URL instead of creating a new one
+        setShareId(newId, shareId);
 
         // Switch to the new itinerary
         localStorage.setItem(ACTIVE_ITINERARY_KEY, newId);
@@ -521,6 +557,23 @@ function App() {
             </div>
           </div>
           <div className="header-actions">
+            <button
+              className={`sidebar-toggle-btn ${showPlanList ? 'active' : ''}`}
+              onClick={() => setShowPlanList(prev => !prev)}
+              title={showPlanList ? 'Hide Plan List' : 'Show Plan List'}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h5v12H2V2zm7 0h5v12H9V2zM3 3v10h3V3H3z"/></svg>
+              {showPlanList ? 'Hide List' : 'Show List'}
+            </button>
+            <button
+              className={`sidebar-toggle-btn ${showXhsImport ? 'active' : ''}`}
+              onClick={() => setShowXhsImport(prev => !prev)}
+              title={showXhsImport ? 'Hide XHS Panel' : 'Show XHS Panel'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 7l4 5-4 5M13 7l4 5-4 5"/></svg>
+              {showXhsImport ? 'Hide XHS' : 'Show XHS'}
+            </button>
+            <div className="header-separator" />
             <div className="undo-redo-buttons">
               <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" className="undo-btn">↩</button>
               <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" className="redo-btn">↪</button>
@@ -543,7 +596,7 @@ function App() {
               />
             </div>
             <span className="day-count">{trip.days.length} days</span>
-            <button 
+            <button
               className="auto-plan-btn"
               onClick={handleAutoPlanClick}
               disabled={isPlanning}
@@ -552,7 +605,7 @@ function App() {
               {isPlanning ? '✨ Planning...' : (geminiKey ? '✨ AI Plan' : '✨ Auto Plan')}
             </button>
             {planningError && <span style={{ color: 'red', fontSize: '12px' }}>Error: {planningError}</span>}
-            <button 
+            <button
               className="clear-plan-btn"
               onClick={() => {
                 if (window.confirm('Are you sure you want to clear the plan? All items will be moved back to the list.')) {
@@ -563,29 +616,62 @@ function App() {
             >
               🗑️ Clear Plan
             </button>
-            <button className="import-btn" onClick={() => setShowScheduleImport(true)}>
-              Import Schedule
-            </button>
-            <button className="import-btn" onClick={() => setShowImport(true)}>
-              Import Places
-            </button>
-            <button
-              className="export-btn"
-              onClick={() => {
-                const json = JSON.stringify(trip, null, 2);
-                const blob = new Blob([json], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                const tabName = itineraryTabs.find(t => t.id === activeItineraryId)?.name || trip.title;
-                a.download = `${tabName.replace(/\s+/g, '-')}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              title="Download trip as JSON file"
-            >
-              📋 Export Trip
-            </button>
+
+            {/* Import dropdown */}
+            <div className="dropdown" ref={importMenuRef}>
+              <button className="import-btn dropdown-trigger" onClick={() => { setImportMenuOpen(prev => !prev); setFileMenuOpen(false); }}>
+                Import ▾
+              </button>
+              {importMenuOpen && (
+                <div className="dropdown-menu">
+                  <button className="dropdown-item" onClick={() => { setShowScheduleImport(true); setImportMenuOpen(false); }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 1h8a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1zm1 3v1h6V4H5zm0 3v1h6V7H5zm0 3v1h4v-1H5z"/></svg>
+                    Import Schedule
+                  </button>
+                  <button className="dropdown-item" onClick={() => { setShowImport(true); setImportMenuOpen(false); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#EA4335"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg>
+                    Import Places
+                  </button>
+                  <button className="dropdown-item" onClick={() => { setShowXhsImport(true); setImportMenuOpen(false); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="#FF2442"/><text x="12" y="16.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="white">小红书</text></svg>
+                    Import XHS
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* File dropdown */}
+            <div className="dropdown" ref={fileMenuRef}>
+              <button className="export-btn dropdown-trigger" onClick={() => { setFileMenuOpen(prev => !prev); setImportMenuOpen(false); }}>
+                File ▾
+              </button>
+              {fileMenuOpen && (
+                <div className="dropdown-menu">
+                  <button className="dropdown-item" onClick={() => {
+                    tripFileInputRef.current?.click();
+                    setFileMenuOpen(false);
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 012.5 2h3.879a1.5 1.5 0 011.06.44l.622.621a.5.5 0 00.354.147H13.5A1.5 1.5 0 0115 4.708V12.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z"/></svg>
+                    Import Trip
+                  </button>
+                  <button className="dropdown-item" onClick={() => {
+                    const json = JSON.stringify(trip, null, 2);
+                    const blob = new Blob([json], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const tabName = itineraryTabs.find(t => t.id === activeItineraryId)?.name || trip.title;
+                    a.download = `${tabName.replace(/\s+/g, '-')}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    setFileMenuOpen(false);
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a.5.5 0 01.5.5v8.793l2.146-2.147a.5.5 0 01.708.708l-3 3a.5.5 0 01-.708 0l-3-3a.5.5 0 11.708-.708L7.5 10.293V1.5A.5.5 0 018 1zM2 13.5a.5.5 0 01.5-.5h11a.5.5 0 010 1h-11a.5.5 0 01-.5-.5z"/></svg>
+                    Export Trip
+                  </button>
+                </div>
+              )}
+            </div>
             <input
               ref={tripFileInputRef}
               type="file"
@@ -593,13 +679,7 @@ function App() {
               style={{ display: 'none' }}
               onChange={handleImportTrip}
             />
-            <button
-              className="import-btn"
-              onClick={() => tripFileInputRef.current?.click()}
-              title="Upload a trip JSON file as a new itinerary"
-            >
-              📂 Import Trip
-            </button>
+
             <button
               className="share-btn"
               onClick={handleShare}
@@ -619,12 +699,19 @@ function App() {
         onDragEnd={handleDragEnd}
       >
         <div className="main-content">
-          <PlanList
-            items={trip.unassignedItems}
-            highlightedItemId={highlightedItemId}
-            onItemClick={handleEditItem}
-            onDeleteItem={(itemId) => deleteItem(PLAN_LIST_ID, itemId)}
-            onDeleteMultiple={(ids) => deleteMultipleItems(PLAN_LIST_ID, ids)}
+          {showPlanList && (
+            <PlanList
+              items={trip.unassignedItems}
+              highlightedItemId={highlightedItemId}
+              onItemClick={handleEditItem}
+              onDeleteItem={(itemId) => deleteItem(PLAN_LIST_ID, itemId)}
+              onDeleteMultiple={(ids) => deleteMultipleItems(PLAN_LIST_ID, ids)}
+            />
+          )}
+          <XhsPanel
+            geminiKey={geminiKey}
+            onClose={() => setShowXhsImport(false)}
+            hidden={!showXhsImport}
           />
           <div className="day-grid">
             {trip.days.map((day, index) => (
@@ -634,6 +721,8 @@ function App() {
                 dayIndex={index}
                 highlightedItemId={highlightedItemId}
                 isFocused={focusedDayId === day.id}
+                columnWidth={dayColumnWidths[day.id] ?? 210}
+                onColumnWidthChange={(w) => setDayColumnWidths(prev => ({ ...prev, [day.id]: w }))}
                 onDayClick={handleDayClick}
                 onItemClick={handleEditItem}
                 onAddItem={() => handleAddItem(day.id)}

@@ -6,6 +6,23 @@ export interface PlanResult {
   explanation: string;
 }
 
+export async function summarizeXhsPosts(
+  apiKey: string,
+  posts: { title: string; fullText?: string }[]
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+
+  const combined = posts
+    .map((p, i) => `--- Post ${i + 1}: ${p.title} ---\n${p.fullText || '(no text)'}`)
+    .join('\n\n');
+
+  const prompt = `Summarize these Xiaohongshu travel posts into concise, actionable travel tips grouped by topic. Use bullet points. Keep it concise. Write in the same language as the posts.\n\n${combined}`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+
 export async function planTripWithGemini(apiKey: string, currentTrip: Trip): Promise<PlanResult> {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });

@@ -348,7 +348,7 @@ export function ImportModal({ onImport, onScheduleImport, tripDays, tripYear, on
             ? 'Paste your schedule below. Activities will be placed on matching days with blocked time slots.'
             : looksLikeSchedule
               ? 'Schedule detected — activities will be placed on matching days with blocked time slots.'
-              : 'Paste Google Maps links, Xiaohongshu links, plain place names, or a schedule (DD/MM Activity HH – HH).'}
+              : 'Paste Google Maps links, plain place names, or a schedule (DD/MM Activity HH – HH).'}
         </p>
 
         <textarea
@@ -356,9 +356,9 @@ export function ImportModal({ onImport, onScheduleImport, tripDays, tripYear, on
           onChange={(e) => setInputText(e.target.value)}
           placeholder={scheduleOnly
             ? "17/03 Tennis 17 – 19.00\n18/03 Tennis 09 – 11.00 & Fitness 15 - 16.30\n19/03 Yoga 08:30 – 10:00"
-            : "https://maps.google.com/...\nhttps://www.xiaohongshu.com/explore/...\nShibuya Sky\n\nor paste a schedule:\n17/03 Tennis 17 – 19.00\n18/03 Fitness 09 – 11.00"}
+            : "https://maps.google.com/...\nShibuya Sky\n\nor paste a schedule:\n17/03 Tennis 17 – 19.00\n18/03 Fitness 09 – 11.00"}
           rows={scheduleOnly ? 8 : 5}
-          autoFocus={scheduleOnly}
+          autoFocus={!!scheduleOnly}
         />
 
         <button className="parse-btn" onClick={parseInput} disabled={!inputText.trim() || isParsing}>

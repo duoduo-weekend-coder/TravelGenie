@@ -11,7 +11,7 @@ function getShareIds(): Record<string, string> {
   }
 }
 
-function setShareId(itineraryId: string, shareId: string) {
+export function setShareId(itineraryId: string, shareId: string) {
   const ids = getShareIds();
   ids[itineraryId] = shareId;
   localStorage.setItem(SHARE_IDS_KEY, JSON.stringify(ids));

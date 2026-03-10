@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Day, AgendaItem } from '../types';
@@ -10,11 +10,16 @@ const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
 const MIN_CARD_HEIGHT = 66; // minimum px reserved per card to prevent overlap
 
+const MIN_COL_WIDTH = 150;
+const MAX_COL_WIDTH = 500;
+
 interface Props {
   day: Day;
   dayIndex: number;
   highlightedItemId?: string;
   isFocused?: boolean;
+  columnWidth: number;
+  onColumnWidthChange: (width: number) => void;
   onDayClick: (dayId: string) => void;
   onItemClick: (item: AgendaItem) => void;
   onAddItem: () => void;
@@ -30,7 +35,7 @@ interface Props {
   pixelsPerHour: number;
 }
 
-export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayClick, onItemClick, onAddItem, onPasteDay, onClearDay, onSetDayLocation, onAddBlockedPeriod, onRemoveBlockedPeriod, onDeleteDay, onDateChange, hasClipboard, pixelsPerHour }: Props) {
+export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, columnWidth, onColumnWidthChange, onDayClick, onItemClick, onAddItem, onPasteDay, onClearDay, onSetDayLocation, onAddBlockedPeriod, onRemoveBlockedPeriod, onDeleteDay, onDateChange, hasClipboard, pixelsPerHour }: Props) {
   const amItems = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot !== 'pm');
   const pmItems = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot === 'pm');
   const hotelItems = day.items.filter(i => i.category === 'accommodation');
@@ -42,6 +47,27 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
   const endDropId = `${day.id}:end`;
 
   const [isEditingDate, setIsEditingDate] = useState(false);
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { startX: e.clientX, startWidth: columnWidth };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = ev.clientX - dragRef.current.startX;
+      const newWidth = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, dragRef.current.startWidth + delta));
+      onColumnWidthChange(newWidth);
+    };
+    const onMouseUp = () => {
+      dragRef.current = null;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [columnWidth, onColumnWidthChange]);
 
   const rulerHeight = getRulerHeight(pixelsPerHour);
   const amHeight = (AM_END_HOUR - START_HOUR) * pixelsPerHour;
@@ -53,7 +79,7 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
   };
 
   return (
-    <div className={`day-column ${isFocused ? 'day-column-focused' : ''}`}>
+    <div className={`day-column ${isFocused ? 'day-column-focused' : ''}`} style={{ width: columnWidth }}>
       <div
         className="day-column-header"
         style={{ borderTop: `3px solid ${getDayColor(dayIndex)}` }}
@@ -130,9 +156,9 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
         <div className="day-zones-col" style={{ height: rulerHeight }}>
           <DropZone id={amDropId} label="AM" items={amItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={amHeight} zoneStartHour={START_HOUR} pixelsPerHour={pixelsPerHour} />
           <DropZone id={pmDropId} label="PM" items={pmItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={pmHeight} zoneStartHour={AM_END_HOUR} pixelsPerHour={pixelsPerHour} />
-          <DropZone id={hotelDropId} label="🏠" items={hotelItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} className="accommodation-row" dayDate={day.date} />
         </div>
       </div>
+      <DropZone id={hotelDropId} label="🏠" items={hotelItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} className="accommodation-row" dayDate={day.date} />
 
       <StartEndZone
         id={endDropId}
@@ -142,6 +168,7 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, onDayCl
       />
 
       <button className="add-item-btn-compact" onClick={onAddItem}>+</button>
+      <div className="col-resize-handle" onMouseDown={handleResizeMouseDown} />
     </div>
   );
 }
