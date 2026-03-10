@@ -1,9 +1,21 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
+
+function getKV() {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  return createClient({ url, token });
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const kv = getKV();
+  if (!kv) {
+    return res.status(503).json({ error: 'Sharing is not configured. Set KV_REST_API_URL and KV_REST_API_TOKEN.' });
   }
 
   const shareId = req.query.id as string;

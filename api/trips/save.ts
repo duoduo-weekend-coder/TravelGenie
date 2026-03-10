@@ -1,13 +1,25 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
 import { nanoid } from 'nanoid';
 
 const MAX_PAYLOAD_BYTES = 900 * 1024; // 900 KB (KV 1 MB limit)
 const TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
 
+function getKV() {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  return createClient({ url, token });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const kv = getKV();
+  if (!kv) {
+    return res.status(503).json({ error: 'Sharing is not configured. Set KV_REST_API_URL and KV_REST_API_TOKEN.' });
   }
 
   try {
