@@ -110,6 +110,24 @@ body {
   gap: 12px;
 }
 
+.undo-redo-buttons {
+  display: flex;
+  gap: 2px;
+}
+.undo-btn, .redo-btn {
+  padding: 4px 8px;
+  font-size: 16px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+.undo-btn:disabled, .redo-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 .day-count {
   font-size: 13px;
   color: #6b7280;
@@ -159,6 +177,45 @@ body {
 
 .export-btn:hover {
   background: #eef2ff;
+}
+
+.share-btn {
+  padding: 6px 14px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.share-btn:hover {
+  background: #059669;
+}
+
+.share-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.share-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.share-url-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: monospace;
+  background: #f9fafb;
+  color: #374151;
 }
 
 .auto-plan-btn {

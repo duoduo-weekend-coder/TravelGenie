@@ -20,6 +20,7 @@ import { MapItem } from './dayColors';
 import { START_HOUR } from './components/TimeRuler';
 import { v4 as uuid } from 'uuid';
 import { savePhotos, stripPhotosForStorage } from './photoStore';
+import { saveSharedTrip, loadSharedTrip, getShareIdFromUrl, clearShareIdFromUrl } from './utils/shareTrip';
 
 const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
@@ -50,7 +51,7 @@ function loadItineraryTabs(): ItineraryTab[] {
 }
 
 function App() {
-  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule } = useTripStore();
+  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, undo, redo, canUndo, canRedo } = useTripStore();
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null);
   const [highlightedItemId, setHighlightedItemId] = useState<string | undefined>();
@@ -66,6 +67,11 @@ function App() {
   const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
     return localStorage.getItem(ACTIVE_ITINERARY_KEY) || 'default';
   });
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [isLoadingShared, setIsLoadingShared] = useState(false);
+  const [loadShareError, setLoadShareError] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("Environment API Key:", import.meta.env.VITE_GEMINI_API_KEY ? "Loaded" : "Not Found");
@@ -83,6 +89,60 @@ function App() {
     localStorage.setItem(ACTIVE_ITINERARY_KEY, fallbackId);
     setActiveItineraryId(fallbackId);
   }, [itineraryTabs, activeItineraryId]);
+
+  // On mount: check for ?share=<id> and load shared trip
+  useEffect(() => {
+    const shareId = getShareIdFromUrl();
+    if (!shareId) return;
+
+    setIsLoadingShared(true);
+    clearShareIdFromUrl();
+
+    loadSharedTrip(shareId)
+      .then((sharedTrip) => {
+        // Create a new itinerary tab for the shared trip
+        const newId = uuid();
+        const name = `${sharedTrip.title} (Shared)`;
+        const newTab: ItineraryTab = { id: newId, name };
+
+        // Strip photos and save to localStorage
+        const lightTrip = {
+          ...sharedTrip,
+          days: sharedTrip.days.map((day: any) => ({
+            ...day,
+            items: stripPhotosForStorage(day.items || []),
+          })),
+          unassignedItems: stripPhotosForStorage(sharedTrip.unassignedItems || []),
+        };
+        localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(lightTrip));
+        setItineraryTabs(prev => [...prev, newTab]);
+
+        // Switch to the new itinerary
+        localStorage.setItem(ACTIVE_ITINERARY_KEY, newId);
+        setActiveItineraryId(newId);
+        window.location.reload();
+      })
+      .catch((err) => {
+        setLoadShareError(err.message || 'Failed to load shared trip');
+      })
+      .finally(() => {
+        setIsLoadingShared(false);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleShare = async () => {
+    setIsSharing(true);
+    setShareError(null);
+    try {
+      const shareId = await saveSharedTrip(trip, activeItineraryId);
+      const url = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
+      setShareUrl(url);
+    } catch (err: any) {
+      setShareError(err.message || 'Failed to share trip');
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   const switchItinerary = (itineraryId: string) => {
     localStorage.setItem(ACTIVE_ITINERARY_KEY, itineraryId);
@@ -461,6 +521,10 @@ function App() {
             </div>
           </div>
           <div className="header-actions">
+            <div className="undo-redo-buttons">
+              <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" className="undo-btn">↩</button>
+              <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" className="redo-btn">↪</button>
+            </div>
             <div className="date-range-inputs">
               <input
                 type="date"
@@ -535,6 +599,14 @@ function App() {
               title="Upload a trip JSON file as a new itinerary"
             >
               📂 Import Trip
+            </button>
+            <button
+              className="share-btn"
+              onClick={handleShare}
+              disabled={isSharing}
+              title="Share this trip via link"
+            >
+              {isSharing ? 'Sharing...' : '🔗 Share'}
             </button>
           </div>
         </div>
@@ -639,6 +711,65 @@ function App() {
               <button className="save-btn" onClick={() => setPlanExplanation(null)}>
                 Got it!
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {isLoadingShared && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2>Loading Shared Trip...</h2>
+            <p style={{ color: '#666', fontSize: 14 }}>Please wait while the shared trip is being loaded.</p>
+          </div>
+        </div>
+      )}
+      {loadShareError && (
+        <div className="modal-overlay" onClick={() => setLoadShareError(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Failed to Load Shared Trip</h2>
+            <p style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{loadShareError}</p>
+            <div className="modal-actions">
+              <button className="save-btn" onClick={() => setLoadShareError(null)}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {shareUrl && (
+        <div className="modal-overlay" onClick={() => setShareUrl(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Trip Shared!</h2>
+            <p style={{ fontSize: 14, color: '#666', marginBottom: 12 }}>
+              Anyone with this link can view your trip. The link expires in 90 days.
+            </p>
+            <div className="share-url-row">
+              <input
+                className="share-url-input"
+                value={shareUrl}
+                readOnly
+                onClick={e => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                className="save-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(shareUrl);
+                }}
+              >
+                Copy
+              </button>
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setShareUrl(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {shareError && (
+        <div className="modal-overlay" onClick={() => setShareError(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Share Failed</h2>
+            <p style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{shareError}</p>
+            <div className="modal-actions">
+              <button className="save-btn" onClick={() => setShareError(null)}>OK</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Trip, Day, AgendaItem, Category } from './types';
 import { ScheduleEntry } from './utils/scheduleParser';
 import { v4 as uuid } from 'uuid';
@@ -25,7 +25,7 @@ import { planTripWithGemini } from './utils/aiPlanner';
 export function useTripStore() {
   const [storageKey] = useState<string>(() => getTripStorageKey(getActiveItineraryId()));
 
-  const [trip, setTrip] = useState<Trip>(() => {
+  const [trip, _setTripRaw] = useState<Trip>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -39,6 +39,60 @@ export function useTripStore() {
     }
     return structuredClone(demoTrip);
   });
+
+  // --- Undo / Redo ---
+  const MAX_HISTORY = 30;
+  const historyRef = useRef<Trip[]>([]);
+  const futureRef = useRef<Trip[]>([]);
+
+  const pushHistory = useCallback((prev: Trip) => {
+    historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), prev];
+    futureRef.current = []; // clear redo on new action
+  }, []);
+
+  // setTrip with history tracking — used by all user actions
+  const setTrip = useCallback((action: Trip | ((prev: Trip) => Trip)) => {
+    _setTripRaw(prev => {
+      pushHistory(prev);
+      return typeof action === 'function' ? action(prev) : action;
+    });
+  }, [pushHistory]);
+
+  const undo = useCallback(() => {
+    if (historyRef.current.length === 0) return;
+    const prev = historyRef.current[historyRef.current.length - 1];
+    historyRef.current = historyRef.current.slice(0, -1);
+    _setTripRaw(current => {
+      futureRef.current = [...futureRef.current, current];
+      return prev;
+    });
+  }, []);
+
+  const redo = useCallback(() => {
+    if (futureRef.current.length === 0) return;
+    const next = futureRef.current[futureRef.current.length - 1];
+    futureRef.current = futureRef.current.slice(0, -1);
+    _setTripRaw(current => {
+      historyRef.current = [...historyRef.current, current];
+      return next;
+    });
+  }, []);
+
+  const canUndo = historyRef.current.length > 0;
+  const canRedo = futureRef.current.length > 0;
+
+  // Keyboard shortcut: Ctrl+Z / Cmd+Z = undo, Ctrl+Shift+Z / Cmd+Shift+Z = redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (mod && e.key === 'z' && e.shiftKey) { e.preventDefault(); redo(); }
+      if (mod && e.key === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
 
   const [geminiKey, setGeminiKey] = useState<string>(() => {
     return import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('gemini-api-key') || '';
@@ -84,7 +138,7 @@ export function useTripStore() {
       .then(migrated => {
         if (migrated.length > 0) {
           const updateMap = new Map(migrated.map(m => [m.id, m]));
-          setTrip(prev => ({
+          _setTripRaw(prev => ({
             ...prev,
             days: prev.days.map(day => ({
               ...day,
@@ -111,7 +165,7 @@ export function useTripStore() {
             .map(i => [i.id, { imageUrl: i.imageUrl, googlePlacePhoto: i.googlePlacePhoto }])
         );
         if (photoMap.size === 0) return;
-        setTrip(prev => ({
+        _setTripRaw(prev => ({
           ...prev,
           days: prev.days.map(day => ({
             ...day,
@@ -621,7 +675,11 @@ export function useTripStore() {
     deleteDay,
     updateDayDate,
     setTripRange,
-    importSchedule
+    importSchedule,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
   };
 }
 

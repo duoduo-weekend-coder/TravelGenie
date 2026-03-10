@@ -14,8 +14,10 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@google/generative-ai": "^0.24.1",
+    "@vercel/kv": "^3.0.0",
     "@vis.gl/react-google-maps": "^1.7.1",
     "kmeans-ts": "^1.0.4",
+    "nanoid": "^5.1.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "uuid": "^9.0.0"

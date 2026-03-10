@@ -234,6 +234,82 @@ export default defineConfig({
         });
       },
     },
+    {
+      name: 'trips-api',
+      configureServer(server) {
+        // In-memory fallback when KV env vars are not configured
+        const store = new Map<string, { data: string; expires: number }>();
+
+        const generateId = () => {
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          let id = '';
+          for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+          return id;
+        };
+
+        // POST /api/trips/save
+        server.middlewares.use(async (req, res, next) => {
+          if (req.url !== '/api/trips/save' || req.method !== 'POST') return next();
+
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => chunks.push(chunk));
+          req.on('end', () => {
+            try {
+              const body = JSON.parse(Buffer.concat(chunks).toString());
+              const { trip, shareId: existingShareId } = body;
+
+              if (!trip || !trip.title || !trip.days) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid trip payload' }));
+                return;
+              }
+
+              const payload = JSON.stringify(trip);
+              if (Buffer.byteLength(payload, 'utf8') > 900 * 1024) {
+                res.writeHead(413, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Trip data too large (max 900 KB)' }));
+                return;
+              }
+
+              const shareId = existingShareId || generateId();
+              const ttl = 90 * 24 * 60 * 60 * 1000; // 90 days in ms
+              store.set(`trip:${shareId}`, { data: payload, expires: Date.now() + ttl });
+              console.log(`[trips-api] Saved trip:${shareId} (${store.size} trips in memory)`);
+
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ shareId }));
+            } catch (e: any) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: e.message }));
+            }
+          });
+        });
+
+        // GET /api/trips/load?id=...
+        server.middlewares.use(async (req, res, next) => {
+          if (!req.url?.startsWith('/api/trips/load')) return next();
+
+          const parsed = new URL(req.url, 'http://localhost');
+          const shareId = parsed.searchParams.get('id');
+          if (!shareId) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Missing id parameter' }));
+            return;
+          }
+
+          const entry = store.get(`trip:${shareId}`);
+          if (!entry || entry.expires < Date.now()) {
+            if (entry) store.delete(`trip:${shareId}`);
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Trip not found or expired' }));
+            return;
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ trip: JSON.parse(entry.data) }));
+        });
+      },
+    },
   ],
   test: {
     environment: 'jsdom',
