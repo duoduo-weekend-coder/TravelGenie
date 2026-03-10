@@ -24,10 +24,16 @@ function checkIsOpen(item: AgendaItem, dayDate?: string): { isOpen: boolean; rea
   if (!dayDate || !item.openingHours || !item.openingHours.periods.length) return { isOpen: true };
   if (item.category === 'accommodation') return { isOpen: true };
 
+  // Detect 24-hour places: single period, opens day 0 hour 0:00, no close time
+  const periods = item.openingHours.periods;
+  if (periods.length === 1 && periods[0].open.day === 0 && periods[0].open.hour === 0 && periods[0].open.minute === 0 && !periods[0].close) {
+    return { isOpen: true };
+  }
+
   const date = new Date(dayDate + 'T00:00:00');
   const dayOfWeek = date.getDay(); // 0 = Sunday
 
-  const todaysPeriods = item.openingHours.periods.filter(p => p.open.day === dayOfWeek);
+  const todaysPeriods = periods.filter(p => p.open.day === dayOfWeek);
 
   if (todaysPeriods.length === 0) {
     return { isOpen: false, reason: 'Closed today' };

@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AgendaItem, Category, PlaceOpeningHours } from '../types';
-import { fetchPlaceDetails, getCategoryFromTypes } from '../googleMaps';
+import { fetchPlaceDetails, fetchPlaceExtras, getCategoryFromTypes } from '../googleMaps';
 
 interface Props {
   item?: AgendaItem;
+  prefill?: { time?: string; timeSlot?: 'am' | 'pm'; suggestedDuration?: number } | null;
   onSave: (item: Omit<AgendaItem, 'id'> | AgendaItem, targetDate?: string) => void;
   onDelete?: () => void;
   onCopy?: () => void;
@@ -14,23 +15,40 @@ interface Props {
 
 const categories: Category[] = ['transport', 'food', 'activity', 'accommodation', 'other'];
 
-export function EditModal({ item, onSave, onDelete, onCopy, onClose, availableDays, showDatePicker }: Props) {
+export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, availableDays, showDatePicker }: Props) {
   const [title, setTitle] = useState(item?.title || '');
-  const [time, setTime] = useState(item?.time || '');
+  const [time, setTime] = useState(item?.time || prefill?.time || '');
   const [selectedDate, setSelectedDate] = useState('');
   const [location, setLocation] = useState(item?.location || '');
   const [googleMapsUrl, setGoogleMapsUrl] = useState(item?.googleMapsUrl || '');
   const [notes, setNotes] = useState(item?.notes || '');
   const [category, setCategory] = useState<Category>(item?.category || 'activity');
-  const [timeSlot, setTimeSlot] = useState<'am' | 'pm' | ''>(item?.timeSlot || '');
+  const [timeSlot, setTimeSlot] = useState<'am' | 'pm' | ''>(item?.timeSlot || prefill?.timeSlot || '');
   const [imageUrl, setImageUrl] = useState(item?.imageUrl || '');
   const [lat, setLat] = useState<number | undefined>(item?.lat);
   const [lng, setLng] = useState<number | undefined>(item?.lng);
   const [openingHours, setOpeningHours] = useState<PlaceOpeningHours | undefined>(item?.openingHours);
   const [reservable] = useState<boolean | undefined>(item?.reservable);
-  const [suggestedDuration, setSuggestedDuration] = useState<number | undefined>(item?.suggestedDuration);
+  const [suggestedDuration, setSuggestedDuration] = useState<number | undefined>(item?.suggestedDuration ?? prefill?.suggestedDuration);
   const [fetching, setFetching] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Lazy-load photos and opening hours for Google Maps places on modal open
+  useEffect(() => {
+    if (!item?.googlePlaceName || (item.imageUrl && item.openingHours)) return;
+    // Find the place_id from cache or use the name to look it up
+    let cancelled = false;
+    (async () => {
+      // We need the place_id — search by name to get it from cache
+      const details = await fetchPlaceDetails(item.googlePlaceName!);
+      if (cancelled || !details?.place_id) return;
+      const extras = await fetchPlaceExtras(details.place_id);
+      if (cancelled || !extras) return;
+      if (extras.photos?.[0] && !imageUrl) setImageUrl(extras.photos[0]);
+      if (extras.openingHours && !openingHours) setOpeningHours(extras.openingHours);
+    })();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGoogleUrlBlur = async () => {
     const isGoogleUrl = googleMapsUrl.includes('google.com/maps') || googleMapsUrl.includes('goo.gl') || googleMapsUrl.includes('maps.app.goo.gl');

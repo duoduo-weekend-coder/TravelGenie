@@ -11,9 +11,9 @@ export interface ScheduleEntry {
 
 const DATE_PATTERN = /^(\d{1,2})\/(\d{1,2})\b/;
 const TIME_RANGE_PATTERN = /(\d{1,2})(?:[.:]\s*(\d{2}))?\s*[–\-]\s*(\d{1,2})(?:[.:]\s*(\d{2}))?/;
-const SINGLE_TIME_PATTERN = /(\d{1,2})[.:]\s*(\d{2})\s*$/;
-// Matches either a time range (17 – 19.00) or a single HH:MM/HH.MM time (14:00)
-const SCHEDULE_LINE_PATTERN = /^\d{1,2}\/\d{1,2}\s+.+(?:\d{1,2}(?:[.:]\d{2})?\s*[–\-]\s*\d{1,2}(?:[.:]\d{2})?|\d{1,2}[.:]\d{2})/;
+const SINGLE_TIME_PATTERN = /(\d{1,2})[.:]\s*(\d{2})/;
+// Matches a date followed by either time-then-place or place-then-time
+const SCHEDULE_LINE_PATTERN = /^\d{1,2}\/\d{1,2}\s+.*(?:\d{1,2}(?:[.:]\d{2})?\s*[–\-]\s*\d{1,2}(?:[.:]\d{2})?|\d{1,2}[.:]\d{2})/;
 
 /**
  * Detect whether dates in the text are DD/MM or MM/DD format.
@@ -87,9 +87,12 @@ export function parseScheduleText(text: string, tripYear: number): ScheduleEntry
         const startTime = normalizeTime(timeMatch[1], timeMatch[2]);
         const endTime = normalizeTime(timeMatch[3], timeMatch[4]);
 
-        // Activity name is everything before the time range
+        // Extract activity name from whichever side of the time range has text
         const timeStartIndex = segment.indexOf(timeMatch[0]);
-        const name = segment.slice(0, timeStartIndex).trim();
+        const before = segment.slice(0, timeStartIndex).trim();
+        const after = segment.slice(timeStartIndex + timeMatch[0].length).trim();
+        // Prefer text before the time ("Place 17-19"), fall back to after ("17-19 Place")
+        const name = before || after;
 
         if (name) {
           activities.push({ name, startTime, endTime });
@@ -97,7 +100,7 @@ export function parseScheduleText(text: string, tripYear: number): ScheduleEntry
         continue;
       }
 
-      // Fallback: single time (e.g. "Sixt 14:00") — default to 1 hour duration
+      // Fallback: single time (e.g. "Sixt 14:00" or "14:00 Sixt") — default to 1 hour
       const singleMatch = segment.match(SINGLE_TIME_PATTERN);
       if (singleMatch) {
         const startTime = normalizeTime(singleMatch[1], singleMatch[2]);
@@ -110,7 +113,9 @@ export function parseScheduleText(text: string, tripYear: number): ScheduleEntry
         );
 
         const timeStartIndex = segment.indexOf(singleMatch[0]);
-        const name = segment.slice(0, timeStartIndex).trim();
+        const before = segment.slice(0, timeStartIndex).trim();
+        const after = segment.slice(timeStartIndex + singleMatch[0].length).trim();
+        const name = before || after;
 
         if (name) {
           activities.push({ name, startTime, endTime });

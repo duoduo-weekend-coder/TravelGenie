@@ -427,9 +427,12 @@ function App() {
     moveItem(sourceId, destId!, activeId, newIndex, timeSlot, dropTime);
   };
 
-  const handleAddItem = (dayId: string) => {
+  const [addItemPrefill, setAddItemPrefill] = useState<{ time?: string; timeSlot?: 'am' | 'pm'; suggestedDuration?: number } | null>(null);
+
+  const handleAddItem = (dayId: string, prefill?: { time?: string; timeSlot?: 'am' | 'pm'; suggestedDuration?: number }) => {
     setSelectedDayId(dayId);
     setEditingItem(null);
+    setAddItemPrefill(prefill || null);
     setIsModalOpen(true);
   };
 
@@ -725,7 +728,7 @@ function App() {
                 onColumnWidthChange={(w) => setDayColumnWidths(prev => ({ ...prev, [day.id]: w }))}
                 onDayClick={handleDayClick}
                 onItemClick={handleEditItem}
-                onAddItem={() => handleAddItem(day.id)}
+                onAddItem={(prefill) => handleAddItem(day.id, prefill)}
                 onCopyDay={(items) => setClipboard(items)}
                 onPasteDay={(dayId) => { if (clipboard) pasteDayItems(dayId, clipboard); }}
                 onClearDay={() => {
@@ -760,10 +763,11 @@ function App() {
       {isModalOpen && (
         <EditModal
           item={editingItem || undefined}
+          prefill={!editingItem ? addItemPrefill : null}
           onSave={handleSaveItem}
           onDelete={editingItem ? handleDeleteItem : undefined}
           onCopy={editingItem ? handleCopyItem : undefined}
-          onClose={() => { setEditingItem(null); setIsModalOpen(false); }}
+          onClose={() => { setEditingItem(null); setIsModalOpen(false); setAddItemPrefill(null); }}
           availableDays={trip.days.map(d => ({ id: d.id, date: d.date }))}
           showDatePicker={selectedDayId === PLAN_LIST_ID}
         />

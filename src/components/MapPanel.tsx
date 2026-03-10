@@ -9,6 +9,27 @@ import {
 import { getDayColor, UNASSIGNED_COLOR, MapItem } from '../dayColors';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const ROUTE_CACHE_KEY = 'travel-route-cache';
+const MAX_ROUTE_CACHE_ENTRIES = 200;
+
+type CachedPath = { lat: number; lng: number }[];
+
+function loadRouteCache(): Record<string, CachedPath> {
+  try {
+    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveRouteCache(cache: Record<string, CachedPath>) {
+  const keys = Object.keys(cache);
+  if (keys.length > MAX_ROUTE_CACHE_ENTRIES) {
+    // Evict oldest entries (first inserted keys)
+    const toRemove = keys.slice(0, keys.length - MAX_ROUTE_CACHE_ENTRIES);
+    toRemove.forEach(k => delete cache[k]);
+  }
+  localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify(cache));
+}
 
 interface Props {
   items: MapItem[];
@@ -20,7 +41,7 @@ function MapContent({ items, highlightedItemId, focusedDayId }: Props) {
   const map = useMap();
   const [infoItem, setInfoItem] = useState<MapItem | null>(null);
   const routesRef = useRef<google.maps.Polyline[]>([]);
-  const routeCacheRef = useRef(new globalThis.Map<string, google.maps.DirectionsResult>());
+  const routeCacheRef = useRef(loadRouteCache());
 
   const mappableItems = useMemo(
     () => items.filter((item) => item.lat !== undefined && item.lng !== undefined),
@@ -81,13 +102,12 @@ function MapContent({ items, highlightedItemId, focusedDayId }: Props) {
       const color = getDayColor(dayIndex);
       const isFocusedRoute = focusedDayId === null || focusedDayId === undefined || focusedDayId === dayId;
 
-      // Build cache key from ordered item IDs
-      // Use anchor type in cache key as well
+      // Build cache key from ordered item IDs + anchor type
       const cacheKey = dayItems.map(i => `${i.id}-${i.isAnchor || ''}`).join(',');
 
-      const drawRoute = (result: google.maps.DirectionsResult) => {
+      const drawPath = (path: { lat: number; lng: number }[]) => {
         const polyline = new google.maps.Polyline({
-          path: result.routes[0].overview_path,
+          path,
           strokeColor: color,
           strokeOpacity: isFocusedRoute ? 0.7 : 0.15,
           strokeWeight: isFocusedRoute ? 4 : 2,
@@ -96,9 +116,10 @@ function MapContent({ items, highlightedItemId, focusedDayId }: Props) {
         routesRef.current.push(polyline);
       };
 
-      const cached = routeCacheRef.current.get(cacheKey);
+      // Check persistent cache
+      const cached = routeCacheRef.current[cacheKey];
       if (cached) {
-        drawRoute(cached);
+        drawPath(cached);
         return;
       }
 
@@ -118,8 +139,10 @@ function MapContent({ items, highlightedItemId, focusedDayId }: Props) {
         },
         (result, status) => {
           if (status === google.maps.DirectionsStatus.OK && result) {
-            routeCacheRef.current.set(cacheKey, result);
-            drawRoute(result);
+            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+            routeCacheRef.current[cacheKey] = path;
+            saveRouteCache(routeCacheRef.current);
+            drawPath(path);
           }
         }
       );

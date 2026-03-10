@@ -183,15 +183,8 @@ export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | n
         types: place.types,
       };
 
-      // Fetch photos + openingHours via the cheaper Place Details endpoint.
-      // One-time cost per place — results are cached as base64 data URLs.
-      const extras = await fetchPlaceExtras(place.id);
-      if (extras) {
-        if (extras.photos && extras.photos.length > 0) result.photos = extras.photos;
-        if (extras.openingHours) result.openingHours = extras.openingHours;
-      }
-
-      // Write to cache (with photos as base64)
+      // Write to cache — photos and openingHours are fetched lazily
+      // via fetchPlaceExtras() only when the user views a specific place.
       cache[normalizedQuery] = result;
       writePlaceCache(cache);
 
@@ -298,20 +291,23 @@ async function fetchListPlaces(url: string): Promise<PlaceDetails[]> {
 
 async function enrichPlace(place: PlaceDetails): Promise<PlaceDetails> {
   if (!place.name) return place;
+
+  // Skip the expensive API call if we already have coordinates —
+  // photos and opening hours are fetched lazily when the user views the item.
+  if (place.lat != null && place.lng != null) {
+    return place;
+  }
+
   try {
     const enriched = await fetchPlaceDetails(place.name);
     if (enriched) {
-      // Fetch photos + openingHours via the cheaper Place Details endpoint
-      const extras = await fetchPlaceExtras(enriched.place_id);
       return {
         ...place,
         place_id: enriched.place_id,
-        photos: extras?.photos && extras.photos.length > 0 ? extras.photos : place.photos,
         types: enriched.types && enriched.types.length > 0 ? enriched.types : place.types,
         formatted_address: enriched.formatted_address || place.formatted_address,
         lat: place.lat ?? enriched.lat,
         lng: place.lng ?? enriched.lng,
-        openingHours: extras?.openingHours || place.openingHours,
       };
     }
   } catch (e) {

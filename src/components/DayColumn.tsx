@@ -22,7 +22,7 @@ interface Props {
   onColumnWidthChange: (width: number) => void;
   onDayClick: (dayId: string) => void;
   onItemClick: (item: AgendaItem) => void;
-  onAddItem: () => void;
+  onAddItem: (prefill?: { time?: string; timeSlot?: 'am' | 'pm'; suggestedDuration?: number }) => void;
   onCopyDay: (items: AgendaItem[]) => void;
   onPasteDay: (dayId: string) => void;
   onClearDay: () => void;
@@ -72,6 +72,16 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, columnW
   const rulerHeight = getRulerHeight(pixelsPerHour);
   const amHeight = (AM_END_HOUR - START_HOUR) * pixelsPerHour;
   const pmHeight = (PM_END_HOUR - AM_END_HOUR) * pixelsPerHour;
+
+  const handleBlankClick = useCallback((hour: number) => {
+    const h = Math.floor(hour);
+    const m = Math.round((hour - h) * 60);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+    const time = `${displayH}:${String(m).padStart(2, '0')} ${period}`;
+    const timeSlot: 'am' | 'pm' = h < 12 ? 'am' : 'pm';
+    onAddItem({ time, timeSlot, suggestedDuration: 45 });
+  }, [onAddItem]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T00:00:00');
@@ -154,8 +164,8 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, columnW
            />
         </div>
         <div className="day-zones-col" style={{ height: rulerHeight }}>
-          <DropZone id={amDropId} label="AM" items={amItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={amHeight} zoneStartHour={START_HOUR} pixelsPerHour={pixelsPerHour} />
-          <DropZone id={pmDropId} label="PM" items={pmItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} dayDate={day.date} zoneHeight={pmHeight} zoneStartHour={AM_END_HOUR} pixelsPerHour={pixelsPerHour} />
+          <DropZone id={amDropId} label="AM" items={amItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} onBlankClick={handleBlankClick} dayDate={day.date} zoneHeight={amHeight} zoneStartHour={START_HOUR} pixelsPerHour={pixelsPerHour} />
+          <DropZone id={pmDropId} label="PM" items={pmItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} onBlankClick={handleBlankClick} dayDate={day.date} zoneHeight={pmHeight} zoneStartHour={AM_END_HOUR} pixelsPerHour={pixelsPerHour} />
         </div>
       </div>
       <DropZone id={hotelDropId} label="🏠" items={hotelItems} highlightedItemId={highlightedItemId} onItemClick={onItemClick} className="accommodation-row" dayDate={day.date} />
@@ -167,7 +177,7 @@ export function DayColumn({ day, dayIndex, highlightedItemId, isFocused, columnW
         onClear={() => onSetDayLocation('end', null)}
       />
 
-      <button className="add-item-btn-compact" onClick={onAddItem}>+</button>
+      <button className="add-item-btn-compact" onClick={() => onAddItem()}>+</button>
       <div className="col-resize-handle" onMouseDown={handleResizeMouseDown} />
     </div>
   );
@@ -205,6 +215,7 @@ interface DropZoneProps {
   items: AgendaItem[];
   highlightedItemId?: string;
   onItemClick: (item: AgendaItem) => void;
+  onBlankClick?: (hour: number) => void;
   className?: string;
   dayDate?: string;
   zoneHeight?: number;
@@ -225,8 +236,23 @@ function parseItemStartHour(item: AgendaItem): number | null {
   return hours + minutes / 60;
 }
 
-function DropZone({ id, label, items, highlightedItemId, onItemClick, className, dayDate, zoneHeight, zoneStartHour, pixelsPerHour }: DropZoneProps) {
+function DropZone({ id, label, items, highlightedItemId, onItemClick, onBlankClick, className, dayDate, zoneHeight, zoneStartHour, pixelsPerHour }: DropZoneProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const zoneRef = useRef<HTMLDivElement>(null);
+
+  const handleZoneClick = useCallback((e: React.MouseEvent) => {
+    // Only trigger if clicking on the zone background itself, not on a card
+    if (!onBlankClick || !zoneRef.current || zoneStartHour == null || !pixelsPerHour) return;
+    const target = e.target as HTMLElement;
+    // Check we clicked the zone div or zone-label, not a card
+    if (target.closest('.agenda-card')) return;
+    const rect = zoneRef.current.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const clickedHour = zoneStartHour + y / pixelsPerHour;
+    // Round to nearest 15 minutes
+    const rounded = Math.round(clickedHour * 4) / 4;
+    onBlankClick(Math.max(zoneStartHour, rounded));
+  }, [onBlankClick, zoneStartHour, pixelsPerHour]);
 
   // Sort items by their start time when we have time info
   const sortedItems = zoneStartHour != null
@@ -269,11 +295,18 @@ function DropZone({ id, label, items, highlightedItemId, onItemClick, className,
     : 0;
   const effectiveHeight = zoneHeight ? Math.max(zoneHeight, contentHeight) : undefined;
 
+  // Merge refs for droppable + click handling
+  const mergedRef = useCallback((node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    (zoneRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+  }, [setNodeRef]);
+
   return (
     <div
-      ref={setNodeRef}
+      ref={mergedRef}
       className={`drop-zone ${className || ''} ${isOver ? 'drop-zone-over' : ''}`}
-      style={effectiveHeight ? { minHeight: effectiveHeight, height: effectiveHeight, position: 'relative' } : undefined}
+      style={effectiveHeight ? { minHeight: effectiveHeight, height: effectiveHeight, position: 'relative', cursor: onBlankClick ? 'pointer' : undefined } : undefined}
+      onClick={handleZoneClick}
     >
       <span className="zone-label">{label}</span>
       <SortableContext items={sortedItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
