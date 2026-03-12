@@ -21,6 +21,12 @@ export function getExistingShareId(itineraryId: string): string | undefined {
   return getShareIds()[itineraryId];
 }
 
+/** Given a shareId, find the local itinerary already linked to it (if any). */
+export function getItineraryByShareId(shareId: string): string | undefined {
+  const ids = getShareIds();
+  return Object.keys(ids).find(k => ids[k] === shareId);
+}
+
 /**
  * Strip photos and POST to /api/trips/save.
  * Returns the share ID (reuses existing if the itinerary was previously shared).

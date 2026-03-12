@@ -15,6 +15,25 @@ const CATEGORY_LABELS: Record<Category, string> = {
   other: 'Other',
 };
 
+const CATEGORY_KEYWORDS: { pattern: RegExp; category: Category }[] = [
+  // accommodation
+  { pattern: /\b(hotel|hostel|motel|inn\b|resort|airbnb|bnb|b&b|guesthouse|ryokan|pension|lodge|villa|apartment|民宿|酒店|旅館|旅馆|宾馆|客栈)\b/i, category: 'accommodation' },
+  // food
+  { pattern: /\b(restaurant|cafe|café|coffee|bakery|bistro|pizzeria|ramen|sushi|noodle|diner|eatery|grill|bbq|barbeque|barbecue|taco|burger|steak|seafood|dim\s*sum|buffet|food\s*(court|hall|market)|brunch|breakfast|lunch|dinner|dessert|ice\s*cream|gelato|patisserie|boulangerie|tea\s*house|pub|bar\b|izakaya|trattoria|brasserie|cantina|tavern|tapas|餐厅|餐馆|饭店|面馆|拉面|咖啡|奶茶|茶馆|小吃|火锅|烧烤|甜品)\b/i, category: 'food' },
+  // transport
+  { pattern: /\b(airport|station|terminal|metro|subway|bus\s*(stop|terminal|station)|ferry|port|taxi|train|rail|shuttle|transit|车站|机场|地铁|码头|渡轮)\b/i, category: 'transport' },
+  // activity
+  { pattern: /\b(museum|temple|shrine|park|garden|castle|palace|tower|bridge|beach|waterfall|lake|mountain|trail|hike|zoo|aquarium|gallery|theater|theatre|stadium|market|mall|shopping|plaza|square|monument|memorial|cathedral|church|mosque|pagoda|ruins|scenic|viewpoint|lookout|observatory|spa|onsen|hot\s*spring|amusement|theme\s*park|disney|universal|ski|surf|dive|snorkel|cruise|safari|公园|寺|庙|神社|城堡|博物馆|美术馆|动物园|水族馆|商场|市场|海滩|瀑布|温泉)\b/i, category: 'activity' },
+];
+
+function inferCategory(title: string, location?: string): Category | null {
+  const text = `${title} ${location || ''}`;
+  for (const { pattern, category } of CATEGORY_KEYWORDS) {
+    if (pattern.test(text)) return category;
+  }
+  return null;
+}
+
 /** Extract a short region token from a location string (first comma-segment, or the whole string). */
 function extractRegion(location: string): string {
   // Try to grab the last meaningful segment (often the city/area)
@@ -32,9 +51,10 @@ interface Props {
   onItemClick: (item: AgendaItem) => void;
   onDeleteItem: (itemId: string) => void;
   onDeleteMultiple: (itemIds: string[]) => void;
+  onUpdateItemCategory: (itemId: string, category: Category) => void;
 }
 
-export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, onDeleteMultiple }: Props) {
+export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, onDeleteMultiple, onUpdateItemCategory }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: PLAN_LIST_ID });
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -125,6 +145,21 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
     setRegionFilter(null);
   };
 
+  const handleCategorizePlaces = () => {
+    let updated = 0;
+    for (const item of items) {
+      if (item.category && item.category !== 'other') continue;
+      const inferred = inferCategory(item.title, item.location);
+      if (inferred) {
+        onUpdateItemCategory(item.id, inferred);
+        updated++;
+      }
+    }
+    if (updated === 0) {
+      alert('All places are already categorized.');
+    }
+  };
+
   return (
     <div className={`plan-list ${isOver ? 'plan-list-over' : ''}`}>
       <div className="plan-list-header">
@@ -195,7 +230,10 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
                 <button className="bulk-btn bulk-delete" onClick={handleBulkDelete}>Delete</button>
               </>
             ) : (
-              <button className="bulk-btn" onClick={selectAll}>Select all</button>
+              <>
+                <button className="bulk-btn" onClick={selectAll}>Select all</button>
+                <button className="bulk-btn" onClick={handleCategorizePlaces} title="Auto-categorize places tagged as 'other' based on their name">Categorize</button>
+              </>
             )}
           </div>
         </div>

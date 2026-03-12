@@ -6,15 +6,22 @@ import { demoTrip } from './demoTrip';
 import { migrateGooglePhotoUrls } from './googleMaps';
 import { savePhotos, loadPhotos, stripPhotosForStorage } from './photoStore';
 
-const DEFAULT_ITINERARY_ID = 'default';
-const ACTIVE_ITINERARY_KEY = 'travel-active-itinerary-id';
-
-function getActiveItineraryId(): string {
-  return localStorage.getItem(ACTIVE_ITINERARY_KEY) || DEFAULT_ITINERARY_ID;
-}
-
 function getTripStorageKey(itineraryId: string): string {
   return `travel-plan-data:${itineraryId}`;
+}
+
+function loadTripFromStorage(key: string): Trip {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (!parsed.unassignedItems) parsed.unassignedItems = [];
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('Failed to load trip from localStorage:', e);
+  }
+  return structuredClone(demoTrip);
 }
 
 export const PLAN_LIST_ID = 'plan-list';
@@ -22,28 +29,19 @@ export const PLAN_LIST_ID = 'plan-list';
 import { generateAutoPlan } from './utils/autoPlanner';
 import { planTripWithGemini } from './utils/aiPlanner';
 
-export function useTripStore() {
-  const [storageKey] = useState<string>(() => getTripStorageKey(getActiveItineraryId()));
+export function useTripStore(activeItineraryId: string) {
+  const storageKey = getTripStorageKey(activeItineraryId);
 
-  const [trip, _setTripRaw] = useState<Trip>(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Migrate old data that lacks unassignedItems
-        if (!parsed.unassignedItems) parsed.unassignedItems = [];
-        return parsed;
-      }
-    } catch (e) {
-      console.warn('Failed to load trip from localStorage:', e);
-    }
-    return structuredClone(demoTrip);
-  });
+  const [trip, _setTripRaw] = useState<Trip>(() => loadTripFromStorage(storageKey));
 
   // --- Undo / Redo ---
   const MAX_HISTORY = 30;
   const historyRef = useRef<Trip[]>([]);
   const futureRef = useRef<Trip[]>([]);
+
+  // Refs for itinerary switching
+  const prevKeyRef = useRef(storageKey);
+  const isSwitchingRef = useRef(false);
 
   const pushHistory = useCallback((prev: Trip) => {
     historyRef.current = [...historyRef.current.slice(-(MAX_HISTORY - 1)), prev];
@@ -101,8 +99,83 @@ export function useTripStore() {
   const [planningError, setPlanningError] = useState<string | null>(null);
   const [planExplanation, setPlanExplanation] = useState<string | null>(null);
 
+  // Reload trip data when the active itinerary changes
+  useEffect(() => {
+    if (prevKeyRef.current === storageKey) return;
+
+    isSwitchingRef.current = true;
+    prevKeyRef.current = storageKey;
+
+    const newTrip = loadTripFromStorage(storageKey);
+    _setTripRaw(newTrip);
+    historyRef.current = [];
+    futureRef.current = [];
+
+    // Load photos for the new trip (use copies to avoid mutating state in-place)
+    let cancelled = false;
+    const allItems = [
+      ...newTrip.days.flatMap(d => d.items.map(i => ({ ...i }))),
+      ...newTrip.unassignedItems.map(i => ({ ...i })),
+    ];
+
+    migrateGooglePhotoUrls(allItems)
+      .then(migrated => {
+        if (cancelled || migrated.length === 0) return;
+        const updateMap = new Map(migrated.map(m => [m.id, m]));
+        _setTripRaw(prev => ({
+          ...prev,
+          days: prev.days.map(day => ({
+            ...day,
+            items: day.items.map(item => {
+              const u = updateMap.get(item.id);
+              return u ? { ...item, ...u } : item;
+            })
+          })),
+          unassignedItems: prev.unassignedItems.map(item => {
+            const u = updateMap.get(item.id);
+            return u ? { ...item, ...u } : item;
+          })
+        }));
+      })
+      .catch(e => console.warn('Photo migration failed (non-fatal):', e));
+
+    loadPhotos(allItems)
+      .then(() => {
+        if (cancelled) return;
+        const photoMap = new Map(
+          allItems
+            .filter(i => i.imageUrl || i.googlePlacePhoto)
+            .map(i => [i.id, { imageUrl: i.imageUrl, googlePlacePhoto: i.googlePlacePhoto }])
+        );
+        if (photoMap.size === 0) return;
+        _setTripRaw(prev => ({
+          ...prev,
+          days: prev.days.map(day => ({
+            ...day,
+            items: day.items.map(item => {
+              const p = photoMap.get(item.id);
+              return p ? { ...item, ...p } : item;
+            })
+          })),
+          unassignedItems: prev.unassignedItems.map(item => {
+            const p = photoMap.get(item.id);
+            return p ? { ...item, ...p } : item;
+          })
+        }));
+      })
+      .catch(e => console.warn('Failed to load photos from IndexedDB:', e));
+
+    return () => { cancelled = true; };
+  }, [storageKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Save trip to localStorage — strip base64 photos first (they go to IndexedDB).
   useEffect(() => {
+    // Skip saving during itinerary switches to avoid writing stale data to the new key
+    if (isSwitchingRef.current) {
+      isSwitchingRef.current = false;
+      return;
+    }
+
     const allItems = [
       ...trip.days.flatMap(d => d.items),
       ...trip.unassignedItems,
@@ -129,9 +202,10 @@ export function useTripStore() {
 
   // On mount: load photos from IndexedDB back into trip state.
   useEffect(() => {
+    // Create shallow copies so loadPhotos won't mutate React state in-place
     const allItems = [
-      ...trip.days.flatMap(d => d.items),
-      ...trip.unassignedItems,
+      ...trip.days.flatMap(d => d.items.map(i => ({ ...i }))),
+      ...trip.unassignedItems.map(i => ({ ...i })),
     ];
     // Also migrate any old Google photo URLs to base64
     migrateGooglePhotoUrls(allItems)
@@ -239,14 +313,14 @@ export function useTripStore() {
 
   const addItem = (dayId: string, item: Omit<AgendaItem, 'id'>) => {
     const newItem: AgendaItem = { ...item, id: uuid() };
-    setTrip({
-      ...trip,
-      days: trip.days.map(day =>
+    setTrip(prev => ({
+      ...prev,
+      days: prev.days.map(day =>
         day.id === dayId
           ? { ...day, items: [...day.items, newItem] }
           : day
       )
-    });
+    }));
   };
 
   const addUnassignedItem = (item: Omit<AgendaItem, 'id'>) => {
@@ -281,9 +355,9 @@ export function useTripStore() {
         )
       }));
     } else {
-      setTrip({
-        ...trip,
-        days: trip.days.map(day =>
+      setTrip(prev => ({
+        ...prev,
+        days: prev.days.map(day =>
           day.id === dayId
             ? {
                 ...day,
@@ -293,7 +367,7 @@ export function useTripStore() {
               }
             : day
         )
-      });
+      }));
     }
   };
 
@@ -301,14 +375,14 @@ export function useTripStore() {
     if (dayId === PLAN_LIST_ID) {
       removeUnassignedItem(itemId);
     } else {
-      setTrip({
-        ...trip,
-        days: trip.days.map(day =>
+      setTrip(prev => ({
+        ...prev,
+        days: prev.days.map(day =>
           day.id === dayId
             ? { ...day, items: day.items.filter(item => item.id !== itemId) }
             : day
         )
-      });
+      }));
     }
   };
 

@@ -21,7 +21,7 @@ import { MapItem } from './dayColors';
 import { START_HOUR } from './components/TimeRuler';
 import { v4 as uuid } from 'uuid';
 import { savePhotos, stripPhotosForStorage } from './photoStore';
-import { saveSharedTrip, loadSharedTrip, getShareIdFromUrl, clearShareIdFromUrl, setShareId } from './utils/shareTrip';
+import { saveSharedTrip, loadSharedTrip, getShareIdFromUrl, clearShareIdFromUrl, setShareId, getItineraryByShareId } from './utils/shareTrip';
 
 const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
@@ -52,7 +52,10 @@ function loadItineraryTabs(): ItineraryTab[] {
 }
 
 function App() {
-  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, undo, redo, canUndo, canRedo } = useTripStore();
+  const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
+    return localStorage.getItem(ACTIVE_ITINERARY_KEY) || 'default';
+  });
+  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, undo, redo, canUndo, canRedo } = useTripStore(activeItineraryId);
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null);
   const [highlightedItemId, setHighlightedItemId] = useState<string | undefined>();
@@ -71,9 +74,6 @@ function App() {
   const tripFileInputRef = useRef<HTMLInputElement>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [itineraryTabs, setItineraryTabs] = useState<ItineraryTab[]>(() => loadItineraryTabs());
-  const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
-    return localStorage.getItem(ACTIVE_ITINERARY_KEY) || 'default';
-  });
   const [dayColumnWidths, setDayColumnWidths] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem('travel-day-column-widths');
     if (saved) {
@@ -127,14 +127,22 @@ function App() {
     const shareId = getShareIdFromUrl();
     if (!shareId) return;
 
-    setIsLoadingShared(true);
     clearShareIdFromUrl();
+
+    // If we already have a local itinerary for this shareId, just switch to it
+    const existingItineraryId = getItineraryByShareId(shareId);
+    if (existingItineraryId && itineraryTabs.some(t => t.id === existingItineraryId)) {
+      switchItinerary(existingItineraryId);
+      return;
+    }
+
+    setIsLoadingShared(true);
 
     loadSharedTrip(shareId)
       .then((sharedTrip) => {
         // Create a new itinerary tab for the shared trip
         const newId = uuid();
-        const name = `${sharedTrip.title} (Shared)`;
+        const name = sharedTrip.title || 'Shared Trip';
         const newTab: ItineraryTab = { id: newId, name };
 
         // Strip photos and save to localStorage
@@ -154,9 +162,7 @@ function App() {
         setShareId(newId, shareId);
 
         // Switch to the new itinerary
-        localStorage.setItem(ACTIVE_ITINERARY_KEY, newId);
-        setActiveItineraryId(newId);
-        window.location.reload();
+        switchItinerary(newId);
       })
       .catch((err) => {
         setLoadShareError(err.message || 'Failed to load shared trip');
@@ -183,7 +189,6 @@ function App() {
   const switchItinerary = (itineraryId: string) => {
     localStorage.setItem(ACTIVE_ITINERARY_KEY, itineraryId);
     setActiveItineraryId(itineraryId);
-    window.location.reload();
   };
 
   const createItinerary = () => {
@@ -709,6 +714,7 @@ function App() {
               onItemClick={handleEditItem}
               onDeleteItem={(itemId) => deleteItem(PLAN_LIST_ID, itemId)}
               onDeleteMultiple={(ids) => deleteMultipleItems(PLAN_LIST_ID, ids)}
+              onUpdateItemCategory={(itemId, category) => updateItem(PLAN_LIST_ID, itemId, { category })}
             />
           )}
           <XhsPanel
