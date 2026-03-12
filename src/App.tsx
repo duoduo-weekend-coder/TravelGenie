@@ -129,23 +129,13 @@ function App() {
 
     clearShareIdFromUrl();
 
-    // If we already have a local itinerary for this shareId, just switch to it
-    const existingItineraryId = getItineraryByShareId(shareId);
-    if (existingItineraryId && itineraryTabs.some(t => t.id === existingItineraryId)) {
-      switchItinerary(existingItineraryId);
-      return;
-    }
-
     setIsLoadingShared(true);
+
+    // Check if we already have a local itinerary for this shareId
+    const existingItineraryId = getItineraryByShareId(shareId);
 
     loadSharedTrip(shareId)
       .then((sharedTrip) => {
-        // Create a new itinerary tab for the shared trip
-        const newId = uuid();
-        const name = sharedTrip.title || 'Shared Trip';
-        const newTab: ItineraryTab = { id: newId, name };
-
-        // Strip photos and save to localStorage
         const lightTrip = {
           ...sharedTrip,
           days: sharedTrip.days.map((day: any) => ({
@@ -154,15 +144,27 @@ function App() {
           })),
           unassignedItems: stripPhotosForStorage(sharedTrip.unassignedItems || []),
         };
-        localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(lightTrip));
-        setItineraryTabs(prev => [...prev, newTab]);
 
-        // Link the original shareId to this new local itinerary
-        // so re-sharing overwrites the same URL instead of creating a new one
-        setShareId(newId, shareId);
+        if (existingItineraryId && itineraryTabs.some(t => t.id === existingItineraryId)) {
+          // Replace existing local data with fresh content from server
+          localStorage.setItem(`travel-plan-data:${existingItineraryId}`, JSON.stringify(lightTrip));
+          // Update tab name in case it changed
+          const name = sharedTrip.title || 'Shared Trip';
+          setItineraryTabs(prev => prev.map(t =>
+            t.id === existingItineraryId ? { ...t, name } : t
+          ));
+          switchItinerary(existingItineraryId);
+        } else {
+          // Create a new itinerary tab
+          const newId = uuid();
+          const name = sharedTrip.title || 'Shared Trip';
+          const newTab: ItineraryTab = { id: newId, name };
 
-        // Switch to the new itinerary
-        switchItinerary(newId);
+          localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(lightTrip));
+          setItineraryTabs(prev => [...prev, newTab]);
+          setShareId(newId, shareId);
+          switchItinerary(newId);
+        }
       })
       .catch((err) => {
         setLoadShareError(err.message || 'Failed to load shared trip');
