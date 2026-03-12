@@ -31,7 +31,7 @@ export function getItineraryByShareId(shareId: string): string | undefined {
  * Strip photos and POST to /api/trips/save.
  * Returns the share ID (reuses existing if the itinerary was previously shared).
  */
-export async function saveSharedTrip(trip: Trip, itineraryId: string): Promise<string> {
+export async function saveSharedTrip(trip: Trip, itineraryId: string, itineraryTabName?: string): Promise<string> {
   // Strip base64 photos to keep payload small
   const lightTrip: Trip = {
     ...trip,
@@ -53,7 +53,7 @@ export async function saveSharedTrip(trip: Trip, itineraryId: string): Promise<s
   const res = await fetch('/api/trips/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ trip: lightTrip, shareId: existingShareId }),
+    body: JSON.stringify({ trip: lightTrip, shareId: existingShareId, itineraryTabName }),
   });
 
   if (!res.ok) {
@@ -68,8 +68,9 @@ export async function saveSharedTrip(trip: Trip, itineraryId: string): Promise<s
 
 /**
  * Fetch a shared trip by share ID.
+ * Returns the trip and optional itinerary tab name.
  */
-export async function loadSharedTrip(shareId: string): Promise<Trip> {
+export async function loadSharedTrip(shareId: string): Promise<Trip & { _itineraryTabName?: string }> {
   const res = await fetch(`/api/trips/load?id=${encodeURIComponent(shareId)}`);
 
   if (res.status === 404) {
@@ -81,7 +82,7 @@ export async function loadSharedTrip(shareId: string): Promise<Trip> {
   }
 
   const { trip } = await res.json();
-  return trip as Trip;
+  return trip as Trip & { _itineraryTabName?: string };
 }
 
 /**

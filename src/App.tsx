@@ -55,7 +55,10 @@ function App() {
   const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
     return localStorage.getItem(ACTIVE_ITINERARY_KEY) || 'default';
   });
-  const { trip, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, undo, redo, canUndo, canRedo } = useTripStore(activeItineraryId);
+  const { trip, setTitle: _setTitle, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, undo, redo, canUndo, canRedo } = useTripStore(activeItineraryId);
+  const tripTitleRef = useRef(trip.title);
+  tripTitleRef.current = trip.title;
+  const setTitle = (title: string) => { tripTitleRef.current = title; _setTitle(title); };
   const [selectedDayId, setSelectedDayId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null);
   const [highlightedItemId, setHighlightedItemId] = useState<string | undefined>();
@@ -73,7 +76,15 @@ function App() {
   const fileMenuRef = useRef<HTMLDivElement>(null);
   const tripFileInputRef = useRef<HTMLInputElement>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
-  const [itineraryTabs, setItineraryTabs] = useState<ItineraryTab[]>(() => loadItineraryTabs());
+  const [itineraryTabs, _setItineraryTabs] = useState<ItineraryTab[]>(() => loadItineraryTabs());
+  const itineraryTabsRef = useRef(itineraryTabs);
+  const setItineraryTabs: typeof _setItineraryTabs = (action) => {
+    _setItineraryTabs(prev => {
+      const next = typeof action === 'function' ? action(prev) : action;
+      itineraryTabsRef.current = next;
+      return next;
+    });
+  };
   const [dayColumnWidths, setDayColumnWidths] = useState<Record<string, number>>(() => {
     const saved = localStorage.getItem('travel-day-column-widths');
     if (saved) {
@@ -136,29 +147,29 @@ function App() {
 
     loadSharedTrip(shareId)
       .then((sharedTrip) => {
+        const { _itineraryTabName, ...tripData } = sharedTrip;
         const lightTrip = {
-          ...sharedTrip,
-          days: sharedTrip.days.map((day: any) => ({
+          ...tripData,
+          days: tripData.days.map((day: any) => ({
             ...day,
             items: stripPhotosForStorage(day.items || []),
           })),
-          unassignedItems: stripPhotosForStorage(sharedTrip.unassignedItems || []),
+          unassignedItems: stripPhotosForStorage(tripData.unassignedItems || []),
         };
+        const tabName = _itineraryTabName || sharedTrip.title || 'Shared Trip';
 
         if (existingItineraryId && itineraryTabs.some(t => t.id === existingItineraryId)) {
           // Replace existing local data with fresh content from server
           localStorage.setItem(`travel-plan-data:${existingItineraryId}`, JSON.stringify(lightTrip));
           // Update tab name in case it changed
-          const name = sharedTrip.title || 'Shared Trip';
           setItineraryTabs(prev => prev.map(t =>
-            t.id === existingItineraryId ? { ...t, name } : t
+            t.id === existingItineraryId ? { ...t, name: tabName } : t
           ));
           switchItinerary(existingItineraryId);
         } else {
           // Create a new itinerary tab
           const newId = uuid();
-          const name = sharedTrip.title || 'Shared Trip';
-          const newTab: ItineraryTab = { id: newId, name };
+          const newTab: ItineraryTab = { id: newId, name: tabName };
 
           localStorage.setItem(`travel-plan-data:${newId}`, JSON.stringify(lightTrip));
           setItineraryTabs(prev => [...prev, newTab]);
@@ -178,7 +189,11 @@ function App() {
     setIsSharing(true);
     setShareError(null);
     try {
-      const shareId = await saveSharedTrip(trip, activeItineraryId);
+      const tabName = itineraryTabsRef.current.find(t => t.id === activeItineraryId)?.name;
+      const tripToShare = tripTitleRef.current !== trip.title
+        ? { ...trip, title: tripTitleRef.current }
+        : trip;
+      const shareId = await saveSharedTrip(tripToShare, activeItineraryId, tabName);
       const url = `${window.location.origin}${window.location.pathname}?share=${shareId}`;
       setShareUrl(url);
     } catch (err: any) {
@@ -542,16 +557,54 @@ function App() {
       <header className="app-header">
         <div className="header-row">
           <div className="header-left">
-            <h1>{trip.title}</h1>
+            <h1
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              onBlur={(e) => {
+                const text = e.currentTarget.textContent?.trim() || '';
+                if (text && text !== trip.title) setTitle(text);
+                else e.currentTarget.textContent = trip.title;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+              }}
+            >{trip.title}</h1>
             <div className="itinerary-tabs">
               {itineraryTabs.map(tab => (
                 <div key={tab.id} className={`itinerary-tab ${tab.id === activeItineraryId ? 'active' : ''}`}>
-                  <button
+                  <span
                     className="itinerary-tab-label"
                     onClick={() => switchItinerary(tab.id)}
+                    onDoubleClick={(e) => {
+                      e.currentTarget.contentEditable = 'true';
+                      e.currentTarget.focus();
+                      // Select all text
+                      const range = document.createRange();
+                      range.selectNodeContents(e.currentTarget);
+                      const sel = window.getSelection();
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.contentEditable = 'false';
+                      const text = e.currentTarget.textContent?.trim() || '';
+                      if (text && text !== tab.name) {
+                        setItineraryTabs(prev => prev.map(t =>
+                          t.id === tab.id ? { ...t, name: text } : t
+                        ));
+                      } else {
+                        e.currentTarget.textContent = tab.name;
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                    }}
+                    suppressContentEditableWarning
+                    spellCheck={false}
                   >
                     {tab.name}
-                  </button>
+                  </span>
                   {itineraryTabs.length > 1 && (
                     <button
                       className="itinerary-tab-delete"

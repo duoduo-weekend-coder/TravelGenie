@@ -23,20 +23,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { trip, shareId: existingShareId } = req.body;
+    const { trip, shareId: existingShareId, itineraryTabName } = req.body;
 
     if (!trip || !trip.title || !trip.days) {
       return res.status(400).json({ error: 'Invalid trip payload' });
     }
 
+    const stored = itineraryTabName ? { ...trip, _itineraryTabName: itineraryTabName } : trip;
+
     // Check payload size
-    const payload = JSON.stringify(trip);
+    const payload = JSON.stringify(stored);
     if (Buffer.byteLength(payload, 'utf8') > MAX_PAYLOAD_BYTES) {
       return res.status(413).json({ error: 'Trip data too large (max 900 KB). Try removing some items.' });
     }
 
     const shareId = existingShareId || nanoid(8);
-    await kv.set(`trip:${shareId}`, trip, { ex: TTL_SECONDS });
+    await kv.set(`trip:${shareId}`, stored, { ex: TTL_SECONDS });
 
     return res.status(200).json({ shareId });
   } catch (e: any) {

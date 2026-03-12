@@ -721,8 +721,13 @@ export function useTripStore(activeItineraryId: string) {
     });
   };
 
+  const setTitle = (title: string) => {
+    setTrip(prev => ({ ...prev, title }));
+  };
+
   return {
     trip,
+    setTitle,
     setStartDate,
     addDay,
     addItem,
