@@ -9,13 +9,14 @@ interface Props {
   onDelete?: () => void;
   onCopy?: () => void;
   onClose: () => void;
+  onEnrichItem?: (itemId: string, data: Partial<AgendaItem>) => void;
   availableDays?: { id: string; date: string }[];
   showDatePicker?: boolean;
 }
 
 const categories: Category[] = ['transport', 'food', 'activity', 'accommodation', 'other'];
 
-export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, availableDays, showDatePicker }: Props) {
+export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, onEnrichItem, availableDays, showDatePicker }: Props) {
   const [title, setTitle] = useState(item?.title || '');
   const [time, setTime] = useState(item?.time || prefill?.time || '');
   const [selectedDate, setSelectedDate] = useState('');
@@ -37,17 +38,29 @@ export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, av
   // Lazy-load photos and opening hours for Google Maps places on modal open
   useEffect(() => {
     if (!item?.googlePlaceName || (item.imageUrl && item.openingHours)) return;
-    // Find the place_id from cache or use the name to look it up
     let cancelled = false;
     (async () => {
-      // We need the place_id — search by name to get it from cache
       const details = await fetchPlaceDetails(item.googlePlaceName!);
       if (cancelled || !details?.place_id) return;
       const extras = await fetchPlaceExtras(details.place_id);
       if (cancelled || !extras) return;
-      if (extras.photos?.[0] && !imageUrl) setImageUrl(extras.photos[0]);
-      if (extras.photoUrls?.[0] && !googlePlacePhoto) setGooglePlacePhoto(extras.photoUrls[0]);
-      if (extras.openingHours && !openingHours) setOpeningHours(extras.openingHours);
+      const enrichData: Partial<AgendaItem> = {};
+      if (extras.photos?.[0] && !imageUrl) {
+        setImageUrl(extras.photos[0]);
+        enrichData.imageUrl = extras.photos[0];
+      }
+      if (extras.photoUrls?.[0] && !googlePlacePhoto) {
+        setGooglePlacePhoto(extras.photoUrls[0]);
+        enrichData.googlePlacePhoto = extras.photoUrls[0];
+      }
+      if (extras.openingHours && !openingHours) {
+        setOpeningHours(extras.openingHours);
+        enrichData.openingHours = extras.openingHours;
+      }
+      // Persist enrichment to trip state so thumbnails survive modal close
+      if (onEnrichItem && item.id && Object.keys(enrichData).length > 0) {
+        onEnrichItem(item.id, enrichData);
+      }
     })();
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

@@ -473,6 +473,17 @@ function App() {
     setIsModalOpen(true);
   };
 
+  const handleEnrichItem = (itemId: string, data: Partial<AgendaItem>) => {
+    // Persist fetched extras (photos, hours) to trip state immediately
+    // so thumbnails survive modal close without requiring Save
+    if (trip.unassignedItems.some(i => i.id === itemId)) {
+      updateItem(PLAN_LIST_ID, itemId, data);
+    } else {
+      const day = trip.days.find(d => d.items.some(i => i.id === itemId));
+      if (day) updateItem(day.id, itemId, data);
+    }
+  };
+
   const handleSaveItem = (item: Omit<AgendaItem, 'id'> | AgendaItem, targetDate?: string) => {
     if (!selectedDayId) return;
 
@@ -574,6 +585,7 @@ function App() {
             onDelete={editingItem ? handleDeleteItem : undefined}
             onCopy={editingItem ? handleCopyItem : undefined}
             onClose={() => { setEditingItem(null); setIsModalOpen(false); setAddItemPrefill(null); }}
+            onEnrichItem={handleEnrichItem}
             availableDays={trip.days.map(d => ({ id: d.id, date: d.date }))}
             showDatePicker={selectedDayId === PLAN_LIST_ID}
           />
@@ -867,6 +879,7 @@ function App() {
           onDelete={editingItem ? handleDeleteItem : undefined}
           onCopy={editingItem ? handleCopyItem : undefined}
           onClose={() => { setEditingItem(null); setIsModalOpen(false); setAddItemPrefill(null); }}
+          onEnrichItem={handleEnrichItem}
           availableDays={trip.days.map(d => ({ id: d.id, date: d.date }))}
           showDatePicker={selectedDayId === PLAN_LIST_ID}
         />
