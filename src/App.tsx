@@ -17,7 +17,9 @@ import { EditModal } from './components/EditModal';
 import { ImportModal } from './components/ImportModal';
 import { XhsPanel } from './components/XhsPanel';
 import { MapPanel } from './components/MapPanel';
+import { MobileView } from './components/MobileView';
 import { MapItem } from './dayColors';
+import { useMobileDetect } from './hooks/useMobileDetect';
 import { START_HOUR } from './components/TimeRuler';
 import { v4 as uuid } from 'uuid';
 import { savePhotos, stripPhotosForStorage } from './photoStore';
@@ -92,6 +94,7 @@ function App() {
     }
     return {};
   });
+  const { isMobile, toggleMobile, manualOverride } = useMobileDetect();
   const [isSharing, setIsSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -552,8 +555,35 @@ function App() {
     setTripRange(start, end);
   };
 
+  const appClassName = `app${manualOverride === true ? ' mobile-mode' : manualOverride === false ? ' desktop-mode' : ''}`;
+
+  if (isMobile) {
+    return (
+      <div className={appClassName}>
+        <MobileView
+          trip={trip}
+          allMapItems={allMapItems}
+          onEditItem={handleEditItem}
+          onToggleMobile={toggleMobile}
+        />
+        {isModalOpen && (
+          <EditModal
+            item={editingItem || undefined}
+            prefill={!editingItem ? addItemPrefill : null}
+            onSave={handleSaveItem}
+            onDelete={editingItem ? handleDeleteItem : undefined}
+            onCopy={editingItem ? handleCopyItem : undefined}
+            onClose={() => { setEditingItem(null); setIsModalOpen(false); setAddItemPrefill(null); }}
+            availableDays={trip.days.map(d => ({ id: d.id, date: d.date }))}
+            showDatePicker={selectedDayId === PLAN_LIST_ID}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="app">
+    <div className={appClassName}>
       <header className="app-header">
         <div className="header-row">
           <div className="header-left">
@@ -750,6 +780,14 @@ function App() {
               title="Share this trip via link"
             >
               {isSharing ? 'Sharing...' : '🔗 Share'}
+            </button>
+            <button
+              className="mobile-toggle-btn"
+              onClick={toggleMobile}
+              title="Switch to Mobile View"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+              Mobile
             </button>
           </div>
         </div>
