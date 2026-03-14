@@ -51,6 +51,7 @@ export function MobileDayView({ day, dayIndex, isToday, onItemClick }: Props) {
               item={item}
               onClick={() => onItemClick(item)}
               dayDate={day.date}
+              disableDrag
             />
           ))}
         </>
@@ -65,6 +66,7 @@ export function MobileDayView({ day, dayIndex, isToday, onItemClick }: Props) {
               item={item}
               onClick={() => onItemClick(item)}
               dayDate={day.date}
+              disableDrag
             />
           ))}
         </>
@@ -79,6 +81,7 @@ export function MobileDayView({ day, dayIndex, isToday, onItemClick }: Props) {
               item={item}
               onClick={() => onItemClick(item)}
               dayDate={day.date}
+              disableDrag
             />
           ))}
         </>

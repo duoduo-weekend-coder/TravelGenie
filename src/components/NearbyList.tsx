@@ -86,7 +86,7 @@ export function NearbyList({ trip, enabled, onItemClick }: Props) {
               {dayLabel}
             </span>
           </div>
-          <AgendaCard item={item} onClick={() => onItemClick(item)} />
+          <AgendaCard item={item} onClick={() => onItemClick(item)} disableDrag />
         </div>
       ))}
       {sorted.length === 0 && (

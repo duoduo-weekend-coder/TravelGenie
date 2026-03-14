@@ -18,6 +18,7 @@ interface Props {
   onClick: () => void;
   isHighlighted?: boolean;
   dayDate?: string; // YYYY-MM-DD
+  disableDrag?: boolean;
 }
 
 function checkIsOpen(item: AgendaItem, dayDate?: string): { isOpen: boolean; reason?: string } {
@@ -79,7 +80,7 @@ function getHoursText(item: AgendaItem, dayDate?: string): string {
   return item.openingHours.weekdayDescriptions[googleIndex] || '';
 }
 
-export function AgendaCard({ item, onClick, isHighlighted, dayDate }: Props) {
+export function AgendaCard({ item, onClick, isHighlighted, dayDate, disableDrag }: Props) {
   const [hovered, setHovered] = useState(false);
   const { isOpen, reason } = checkIsOpen(item, dayDate);
   const hoursText = getHoursText(item, dayDate);
@@ -97,7 +98,7 @@ export function AgendaCard({ item, onClick, isHighlighted, dayDate }: Props) {
     transform,
     transition,
     isDragging
-  } = useSortable({ id: item.id });
+  } = useSortable({ id: item.id, disabled: disableDrag });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -110,8 +111,8 @@ export function AgendaCard({ item, onClick, isHighlighted, dayDate }: Props) {
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
+      {...(disableDrag ? {} : attributes)}
+      {...(disableDrag ? {} : listeners)}
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
