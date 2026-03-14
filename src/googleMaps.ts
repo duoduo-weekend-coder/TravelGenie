@@ -11,6 +11,7 @@ export interface PlaceDetails {
   lat?: number;
   lng?: number;
   photos?: string[];
+  photoUrls?: string[];
   url?: string;
   types?: string[];
   openingHours?: PlaceOpeningHours;
@@ -209,7 +210,7 @@ export async function fetchMultiplePlaces(urls: string[]): Promise<(PlaceDetails
  * Uses Place Details (cheaper than Text Search) and only called when the user
  * actually views/edits a specific place.
  */
-export async function fetchPlaceExtras(placeId: string): Promise<{ photos?: string[]; openingHours?: PlaceOpeningHours } | null> {
+export async function fetchPlaceExtras(placeId: string): Promise<{ photos?: string[]; photoUrls?: string[]; openingHours?: PlaceOpeningHours } | null> {
   await initMaps();
 
   // Check if extras are already cached for this place (and already converted to data URLs)
@@ -220,7 +221,7 @@ export async function fetchPlaceExtras(placeId: string): Promise<{ photos?: stri
     const hasLocalPhotos = cached.photos && cached.photos.length > 0 &&
       !cached.photos.some(p => isGooglePhotoUrl(p));
     if (hasLocalPhotos || cached.openingHours) {
-      return { photos: cached.photos, openingHours: cached.openingHours };
+      return { photos: cached.photos, photoUrls: cached.photoUrls, openingHours: cached.openingHours };
     }
   }
 
@@ -230,8 +231,10 @@ export async function fetchPlaceExtras(placeId: string): Promise<{ photos?: stri
     await place.fetchFields({ fields: ['photos', 'regularOpeningHours'] });
 
     let photos: string[] = [];
+    let photoUrls: string[] = [];
     if (place.photos && place.photos.length > 0) {
       const rawUrl = place.photos[0].getURI({ maxWidth: 400, maxHeight: 400 });
+      photoUrls = [rawUrl];
       photos = [await photoToDataUrl(rawUrl)];
     }
 
@@ -245,11 +248,11 @@ export async function fetchPlaceExtras(placeId: string): Promise<{ photos?: stri
 
     // Update cache with extras
     if (cacheKey) {
-      cache[cacheKey] = { ...cache[cacheKey], photos, openingHours };
+      cache[cacheKey] = { ...cache[cacheKey], photos, photoUrls, openingHours };
       writePlaceCache(cache);
     }
 
-    return { photos, openingHours };
+    return { photos, photoUrls, openingHours };
   } catch (e) {
     console.error('fetchPlaceExtras error:', e);
     return null;
@@ -390,15 +393,17 @@ export async function migrateGooglePhotoUrls(
   const results = await Promise.all(
     toMigrate.map(async (item) => {
       const updates: { id: string; imageUrl?: string; googlePlacePhoto?: string } = { id: item.id };
-      // If both point to the same URL, convert once
-      const sameUrl = item.imageUrl && item.imageUrl === item.googlePlacePhoto;
       if (item.imageUrl && isGooglePhotoUrl(item.imageUrl)) {
         updates.imageUrl = await photoToDataUrl(item.imageUrl);
       }
+      // Keep googlePlacePhoto as the original URL (not base64) so it
+      // survives localStorage stripping and works as a fallback on devices
+      // that don't have the base64 version in IndexedDB.
       if (item.googlePlacePhoto && isGooglePhotoUrl(item.googlePlacePhoto)) {
-        updates.googlePlacePhoto = sameUrl && updates.imageUrl
-          ? updates.imageUrl
-          : await photoToDataUrl(item.googlePlacePhoto);
+        const dataUrl = await photoToDataUrl(item.googlePlacePhoto);
+        // Store base64 in imageUrl (goes to IndexedDB), keep URL in googlePlacePhoto
+        if (!updates.imageUrl) updates.imageUrl = dataUrl;
+        updates.googlePlacePhoto = item.googlePlacePhoto; // preserve original URL
       }
       return updates;
     })

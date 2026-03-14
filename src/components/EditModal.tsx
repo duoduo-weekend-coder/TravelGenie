@@ -25,6 +25,7 @@ export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, av
   const [category, setCategory] = useState<Category>(item?.category || 'activity');
   const [timeSlot, setTimeSlot] = useState<'am' | 'pm' | ''>(item?.timeSlot || prefill?.timeSlot || '');
   const [imageUrl, setImageUrl] = useState(item?.imageUrl || '');
+  const [googlePlacePhoto, setGooglePlacePhoto] = useState(item?.googlePlacePhoto || '');
   const [lat, setLat] = useState<number | undefined>(item?.lat);
   const [lng, setLng] = useState<number | undefined>(item?.lng);
   const [openingHours, setOpeningHours] = useState<PlaceOpeningHours | undefined>(item?.openingHours);
@@ -45,6 +46,7 @@ export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, av
       const extras = await fetchPlaceExtras(details.place_id);
       if (cancelled || !extras) return;
       if (extras.photos?.[0] && !imageUrl) setImageUrl(extras.photos[0]);
+      if (extras.photoUrls?.[0] && !googlePlacePhoto) setGooglePlacePhoto(extras.photoUrls[0]);
       if (extras.openingHours && !openingHours) setOpeningHours(extras.openingHours);
     })();
     return () => { cancelled = true; };
@@ -80,7 +82,7 @@ export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, av
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const data = {
-      title, time, location, lat, lng, googleMapsUrl, notes, category, imageUrl, openingHours, reservable, suggestedDuration,
+      title, time, location, lat, lng, googleMapsUrl, notes, category, imageUrl, googlePlacePhoto, openingHours, reservable, suggestedDuration,
       ...(timeSlot ? { timeSlot: timeSlot as 'am' | 'pm' } : {})
     };
     if (item) {

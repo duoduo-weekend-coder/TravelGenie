@@ -180,7 +180,7 @@ export function ImportModal({ onImport, onScheduleImport, tripDays, tripYear, on
                         ? line
                         : `https://www.google.com/maps/search/${encodeURIComponent(line)}`,
                       googlePlaceName: details.name || '',
-                      googlePlacePhoto: details.photos?.[0] || '',
+                      googlePlacePhoto: details.photoUrls?.[0] || details.photos?.[0] || '',
                       imageUrl: details.photos?.[0] || '',
                       category: getCategoryFromTypes(details.types || []) as Category,
                       openingHours: details.openingHours,
