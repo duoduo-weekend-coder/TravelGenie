@@ -575,6 +575,7 @@ function App() {
           trip={trip}
           allMapItems={allMapItems}
           onEditItem={handleEditItem}
+          onAddItem={(dayId) => handleAddItem(dayId)}
           onToggleMobile={toggleMobile}
         />
         {isModalOpen && (

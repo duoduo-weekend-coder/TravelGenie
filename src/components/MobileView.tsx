@@ -13,6 +13,7 @@ interface Props {
   trip: Trip;
   allMapItems: MapItem[];
   onEditItem: (item: AgendaItem) => void;
+  onAddItem: (dayId: string) => void;
   onToggleMobile: () => void;
 }
 
@@ -24,7 +25,7 @@ function getTodayStr(): string {
   return `${y}-${m}-${day}`;
 }
 
-export function MobileView({ trip, allMapItems, onEditItem, onToggleMobile }: Props) {
+export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleMobile }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [mapFocusedDayId, setMapFocusedDayId] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export function MobileView({ trip, allMapItems, onEditItem, onToggleMobile }: Pr
                   dayIndex={todayDayIndex}
                   isToday
                   onItemClick={onEditItem}
+                  onAddItem={() => onAddItem(trip.days[todayDayIndex].id)}
                 />
               ) : (
                 <div className="mobile-empty-tab">
@@ -138,6 +140,7 @@ export function MobileView({ trip, allMapItems, onEditItem, onToggleMobile }: Pr
                     dayIndex={selectedDayIndex}
                     isToday={trip.days[selectedDayIndex].date === todayStr}
                     onItemClick={onEditItem}
+                    onAddItem={() => onAddItem(trip.days[selectedDayIndex].id)}
                   />
                 )}
                 {trip.days.length === 0 && (

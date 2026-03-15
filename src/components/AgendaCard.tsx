@@ -125,7 +125,19 @@ export function AgendaCard({ item, onClick, isHighlighted, dayDate, disableDrag 
         {item.sourceType === 'xiaohongshu' && (
           <span className="xhs-card-badge">小红书</span>
         )}
-        {item.location && <p className="location">📍 {item.location}</p>}
+        {item.location && <p className="location">📍 {item.location}
+          {(item.lat != null || item.location) && (
+            <a
+              className="card-map-link"
+              href={item.lat != null
+                ? `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}`
+                : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location!)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+            >Map</a>
+          )}
+        </p>}
         {dayDate && hoursText && <p className="location" style={{ fontSize: '9px', color: isOpen ? '#6b7280' : '#ef4444' }}>🕒 {hoursText}</p>}
         {item.reservable && (
           <span className="location" style={{ display: 'block', fontSize: '10px', color: '#d97706', fontWeight: 600 }}>

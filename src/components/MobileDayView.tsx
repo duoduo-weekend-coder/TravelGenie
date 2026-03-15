@@ -7,6 +7,7 @@ interface Props {
   dayIndex: number;
   isToday?: boolean;
   onItemClick: (item: AgendaItem) => void;
+  onAddItem?: () => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -24,7 +25,7 @@ function AnchorCard({ item, label, onItemClick }: { item: AgendaItem; label: str
   );
 }
 
-export function MobileDayView({ day, dayIndex, isToday, onItemClick }: Props) {
+export function MobileDayView({ day, dayIndex, isToday, onItemClick, onAddItem }: Props) {
   const color = getDayColor(dayIndex);
   const amItems = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot !== 'pm');
   const pmItems = day.items.filter(i => i.category !== 'accommodation' && i.timeSlot === 'pm');
@@ -85,6 +86,12 @@ export function MobileDayView({ day, dayIndex, isToday, onItemClick }: Props) {
             />
           ))}
         </>
+      )}
+
+      {onAddItem && (
+        <button className="mobile-add-item-btn" onClick={onAddItem}>
+          + Add Item
+        </button>
       )}
 
       {day.endLocation && (

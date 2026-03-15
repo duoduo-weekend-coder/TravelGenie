@@ -1367,6 +1367,17 @@ body {
   font-weight: 600;
 }
 
+.card-map-link {
+  margin-left: 4px;
+  font-size: 10px;
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: 600;
+}
+.card-map-link:hover {
+  text-decoration: underline;
+}
+
 .card-thumb {
   width: 32px;
   height: 32px;
@@ -2021,6 +2032,24 @@ body {
   text-align: right;
 }
 
+.mobile-add-item-btn {
+  width: 100%;
+  padding: 12px;
+  margin-top: 8px;
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 15px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-add-item-btn:active {
+  border-color: #6366f1;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
+}
+
 .mobile-empty-day,
 .mobile-empty-tab {
   text-align: center;
@@ -2121,6 +2150,36 @@ body {
 }
 .nearby-refresh-btn:active {
   background: #f3f4f6;
+}
+
+.nearby-filters {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+.nearby-filters::-webkit-scrollbar { display: none; }
+
+.nearby-filter-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: white;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s;
+}
+.nearby-filter-btn.active {
+  border-color: #6366f1;
+  background: #6366f1;
+  color: white;
 }
 
 .nearby-item {
