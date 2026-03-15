@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { AgendaItem, Category, PlaceOpeningHours } from '../types';
 import { fetchPlaceDetails, fetchPlaceExtras, getCategoryFromTypes } from '../googleMaps';
+import { inferTimeSlot } from '../utils/time';
 
 interface Props {
   item?: AgendaItem;
@@ -94,9 +95,11 @@ export function EditModal({ item, prefill, onSave, onDelete, onCopy, onClose, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Auto-infer timeSlot from time string if user didn't explicitly pick one
+    const effectiveSlot = timeSlot || inferTimeSlot(time) || undefined;
     const data = {
       title, time, location, lat, lng, googleMapsUrl, notes, category, imageUrl, googlePlacePhoto, openingHours, reservable, suggestedDuration,
-      ...(timeSlot ? { timeSlot: timeSlot as 'am' | 'pm' } : {})
+      ...(effectiveSlot ? { timeSlot: effectiveSlot } : {})
     };
     if (item) {
       onSave({ ...data, id: item.id }, selectedDate || undefined);

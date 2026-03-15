@@ -8,7 +8,8 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core';
-import { AgendaItem } from './types';
+import { AgendaItem, Category } from './types';
+import { syncGoogleMapsList, getCategoryFromTypes } from './googleMaps';
 import { ScheduleEntry } from './utils/scheduleParser';
 import { useTripStore, PLAN_LIST_ID } from './store';
 import { PlanList } from './components/PlanList';
@@ -57,7 +58,7 @@ function App() {
   const [activeItineraryId, setActiveItineraryId] = useState<string>(() => {
     return localStorage.getItem(ACTIVE_ITINERARY_KEY) || 'default';
   });
-  const { trip, setTitle: _setTitle, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, undo, redo, canUndo, canRedo } = useTripStore(activeItineraryId);
+  const { trip, setTitle: _setTitle, addDay, addItem, addUnassignedItem, addMultipleUnassignedItems, updateItem, deleteItem, deleteMultipleItems, moveItem, pasteDayItems, autoPlan, isPlanning, planningError, planExplanation, setPlanExplanation, clearDay, clearPlan, setDayLocation, geminiKey, setGeminiKey, addBlockedPeriod, removeBlockedPeriod, deleteDay, updateDayDate, setTripRange, importSchedule, addGoogleMapsListUrl, undo, redo, canUndo, canRedo } = useTripStore(activeItineraryId);
   const tripTitleRef = useRef(trip.title);
   tripTitleRef.current = trip.title;
   const setTitle = (title: string) => { tripTitleRef.current = title; _setTitle(title); };
@@ -100,6 +101,8 @@ function App() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [isLoadingShared, setIsLoadingShared] = useState(false);
   const [loadShareError, setLoadShareError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   useEffect(() => {
     console.log("Environment API Key:", import.meta.env.VITE_GEMINI_API_KEY ? "Loaded" : "Not Found");
@@ -537,11 +540,70 @@ function App() {
     }
   };
 
-  const handleImport = (items: Omit<AgendaItem, 'id'>[]) => {
+  const handleImport = (items: Omit<AgendaItem, 'id'>[], sourceUrl?: string) => {
     try {
       addMultipleUnassignedItems(items);
+      // Save the list URL only if multiple Google Maps items were imported (i.e. it was a list, not a single place)
+      const gmItems = items.filter(i => i.sourceType === 'google_maps');
+      if (sourceUrl && gmItems.length >= 2) {
+        addGoogleMapsListUrl(sourceUrl);
+      }
     } catch (e) {
       console.error('Import error:', e);
+    }
+  };
+
+  const handleSyncGoogleMaps = async () => {
+    const urls = trip.googleMapsListUrls;
+    if (!urls || urls.length === 0) return;
+
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      // Collect all existing place names (normalized)
+      const existingNames = new Set<string>();
+      const allItems = [...trip.days.flatMap(d => d.items), ...trip.unassignedItems];
+      for (const item of allItems) {
+        if (item.googlePlaceName) existingNames.add(item.googlePlaceName.trim().toLowerCase());
+      }
+
+      let totalNew = 0;
+      for (const url of urls) {
+        const newPlaces = await syncGoogleMapsList(url, existingNames);
+        if (newPlaces.length > 0) {
+          const newItems: Omit<AgendaItem, 'id'>[] = newPlaces.map(details => ({
+            title: details.name || '',
+            location: details.formatted_address || '',
+            lat: details.lat,
+            lng: details.lng,
+            googleMapsUrl: details.url || `https://www.google.com/maps/search/${encodeURIComponent(details.name)}`,
+            googlePlaceName: details.name || '',
+            googlePlacePhoto: details.photoUrls?.[0] || details.photos?.[0] || '',
+            imageUrl: details.photos?.[0] || '',
+            category: getCategoryFromTypes(details.types || []) as Category,
+            openingHours: details.openingHours,
+            reservable: details.reservable,
+            notes: details.comment || '',
+            sourceType: 'google_maps' as const,
+            sourceUrl: url,
+          }));
+          addMultipleUnassignedItems(newItems);
+          // Add new names to the set so subsequent URLs don't re-add them
+          for (const p of newPlaces) {
+            existingNames.add(p.name.trim().toLowerCase());
+          }
+          totalNew += newPlaces.length;
+        }
+      }
+
+      setSyncMessage(totalNew > 0 ? `Added ${totalNew} new place${totalNew !== 1 ? 's' : ''}` : 'No new places found');
+      setTimeout(() => setSyncMessage(null), 4000);
+    } catch (e: any) {
+      console.error('Sync error:', e);
+      setSyncMessage(`Sync failed: ${e.message || 'Unknown error'}`);
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -577,6 +639,9 @@ function App() {
           onEditItem={handleEditItem}
           onAddItem={(dayId) => handleAddItem(dayId)}
           onToggleMobile={toggleMobile}
+          onSync={handleSyncGoogleMaps}
+          syncing={syncing}
+          syncMessage={syncMessage}
         />
         {isModalOpen && (
           <EditModal
@@ -745,6 +810,23 @@ function App() {
                 </div>
               )}
             </div>
+
+            {/* Sync button — only visible when list URLs are saved */}
+            {trip.googleMapsListUrls && trip.googleMapsListUrls.length > 0 && (
+              <button
+                className="sync-btn"
+                onClick={handleSyncGoogleMaps}
+                disabled={syncing}
+                title="Sync new places from imported Google Maps lists"
+              >
+                <svg className={syncing ? 'spin' : ''} width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                  <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+                </svg>
+                {syncing ? 'Syncing...' : 'Sync'}
+              </button>
+            )}
+            {syncMessage && <span className="sync-message">{syncMessage}</span>}
 
             {/* File dropdown */}
             <div className="dropdown" ref={fileMenuRef}>

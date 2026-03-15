@@ -6,8 +6,9 @@ import { MapItem, getDayColor } from '../dayColors';
 import { MobileDayView } from './MobileDayView';
 import { NearbyList } from './NearbyList';
 import { MapPanel } from './MapPanel';
+import { AgendaCard } from './AgendaCard';
 
-type Tab = 'today' | 'nearby' | 'map' | 'days';
+type Tab = 'today' | 'nearby' | 'map' | 'days' | 'list';
 
 interface Props {
   trip: Trip;
@@ -15,6 +16,9 @@ interface Props {
   onEditItem: (item: AgendaItem) => void;
   onAddItem: (dayId: string) => void;
   onToggleMobile: () => void;
+  onSync?: () => void;
+  syncing?: boolean;
+  syncMessage?: string | null;
 }
 
 function getTodayStr(): string {
@@ -25,7 +29,7 @@ function getTodayStr(): string {
   return `${y}-${m}-${day}`;
 }
 
-export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleMobile }: Props) {
+export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleMobile, onSync, syncing, syncMessage }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [mapFocusedDayId, setMapFocusedDayId] = useState<string | null>(null);
@@ -51,9 +55,26 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
         <div className="mobile-view">
           <div className="mobile-header">
             <h1 className="mobile-title">{trip.title}</h1>
-            <button className="mobile-desktop-btn" onClick={onToggleMobile}>
-              Desktop
-            </button>
+            <div className="mobile-header-actions">
+              {onSync && trip.googleMapsListUrls && trip.googleMapsListUrls.length > 0 && (
+                <button
+                  className="mobile-sync-btn"
+                  onClick={onSync}
+                  disabled={syncing}
+                  title="Sync new places from Google Maps lists"
+                >
+                  <svg className={syncing ? 'spin' : ''} width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
+                    <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
+                  </svg>
+                  {syncing ? 'Syncing...' : 'Sync'}
+                </button>
+              )}
+              {syncMessage && <span className="mobile-sync-message">{syncMessage}</span>}
+              <button className="mobile-desktop-btn" onClick={onToggleMobile}>
+                Desktop
+              </button>
+            </div>
           </div>
 
           <div className="mobile-content">
@@ -150,6 +171,31 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
                 )}
               </div>
             )}
+
+            {activeTab === 'list' && (
+              <div className="mobile-list-tab">
+                <div className="mobile-list-header">
+                  <span className="mobile-list-count">{trip.unassignedItems.length} unassigned place{trip.unassignedItems.length !== 1 ? 's' : ''}</span>
+                </div>
+                {trip.unassignedItems.length > 0 ? (
+                  <div className="mobile-list-items">
+                    {trip.unassignedItems.map(item => (
+                      <AgendaCard
+                        key={item.id}
+                        item={item}
+                        onClick={() => onEditItem(item)}
+                        disableDrag
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mobile-empty-tab">
+                    <p>No unassigned places</p>
+                    <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 4 }}>Import places or use Sync to add items here</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mobile-tab-bar">
@@ -180,6 +226,14 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 6h16M4 10h16M4 14h10M4 18h6"/></svg>
               <span>Days</span>
+            </button>
+            <button
+              className={`mobile-tab ${activeTab === 'list' ? 'active' : ''}`}
+              onClick={() => setActiveTab('list')}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              {trip.unassignedItems.length > 0 && <span className="mobile-tab-badge">{trip.unassignedItems.length}</span>}
+              <span>List</span>
             </button>
           </div>
         </div>

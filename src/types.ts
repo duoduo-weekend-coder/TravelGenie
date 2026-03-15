@@ -49,4 +49,5 @@ export interface Trip {
   startDate: string;
   days: Day[];
   unassignedItems: AgendaItem[];
+  googleMapsListUrls?: string[];
 }

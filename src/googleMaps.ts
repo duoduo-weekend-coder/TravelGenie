@@ -133,8 +133,6 @@ function writePlaceCache(cache: PlaceCache): void {
 }
 
 export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | null> {
-  await initMaps();
-
   let url = input;
 
   // Resolve shortened URLs to full Google Maps URLs first
@@ -149,12 +147,15 @@ export async function fetchPlaceDetails(input: string): Promise<PlaceDetails | n
 
   const normalizedQuery = query.trim().toLowerCase();
 
-  // Check place cache
+  // Check place cache BEFORE loading the SDK to avoid unnecessary API initialization
   const cache = loadPlaceCache();
   if (cache[normalizedQuery]) {
     console.log('Place cache hit for:', normalizedQuery);
     return cache[normalizedQuery];
   }
+
+  // Only load the Maps SDK when we actually need to call the API
+  await initMaps();
 
   console.log('Searching for:', query);
 
@@ -366,6 +367,38 @@ export async function fetchPlaces(input: string): Promise<PlaceDetails[]> {
   // Single place — pass the resolved URL to avoid redundant short-URL resolution
   const details = await fetchPlaceDetails(url);
   return details ? [details] : [];
+}
+
+/**
+ * Re-fetch a Google Maps list and return only places not already in the trip.
+ * Uses the place cache for enrichment, so known places won't trigger API calls.
+ */
+export async function syncGoogleMapsList(
+  url: string,
+  existingNames: Set<string>
+): Promise<PlaceDetails[]> {
+  // Resolve short URL if needed
+  let resolvedUrl = url;
+  if (url.includes('goo.gl') || url.includes('maps.app.goo.gl')) {
+    resolvedUrl = await resolveShortUrl(url);
+  }
+
+  // Fetch current list contents from server (always fresh scrape)
+  let listPlaces = await fetchListPlaces(resolvedUrl);
+  if (listPlaces.length === 0 && resolvedUrl !== url) {
+    listPlaces = await fetchListPlaces(url);
+  }
+
+  // Filter out places already in the trip
+  const newPlaces = listPlaces.filter(
+    p => !existingNames.has(p.name.trim().toLowerCase())
+  );
+
+  if (newPlaces.length === 0) return [];
+
+  // Enrich new places (cache will handle known names cheaply)
+  const enriched = await Promise.all(newPlaces.map(p => enrichPlace(p)));
+  return enriched;
 }
 
 function isGooglePhotoUrl(url: string): boolean {

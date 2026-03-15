@@ -7,7 +7,7 @@ import { mapXhsResponseToAgendaDraft, parseXiaohongshuUrl } from '../utils/xiaoh
 import { isScheduleText, parseScheduleText, ScheduleEntry } from '../utils/scheduleParser';
 
 interface ImportModalProps {
-  onImport: (items: Omit<AgendaItem, 'id'>[]) => void;
+  onImport: (items: Omit<AgendaItem, 'id'>[], sourceUrl?: string) => void;
   onScheduleImport?: (entries: ScheduleEntry[]) => void;
   tripDays?: { id: string; date: string }[];
   tripYear?: number;
@@ -82,7 +82,7 @@ function draftToRow(rawInput: string, draft: Omit<AgendaItem, 'id'>): ParsedImpo
 }
 
 export function ImportModal({ onImport, onScheduleImport, tripDays, tripYear, onClose, scheduleOnly }: ImportModalProps) {
-  const [inputText, setInputText] = useState(scheduleOnly ? '' : 'https://maps.app.goo.gl/rgxXqdymPJ6vB4Av6');
+  const [inputText, setInputText] = useState(scheduleOnly ? '' : 'https://maps.app.goo.gl/NnicMDnxgKkreb878');
   const [places, setPlaces] = useState<ParsedImportRow[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [scheduleMode, setScheduleMode] = useState(false);
@@ -332,7 +332,9 @@ export function ImportModal({ onImport, onScheduleImport, tripDays, tripYear, on
       .map((place) => place.draft)
       .filter((draft): draft is Omit<AgendaItem, 'id'> => Boolean(draft));
 
-    onImport(items);
+    // Pass the source URL if this was a single Google Maps list import
+    const sourceUrl = inputText.trim().startsWith('http') ? inputText.trim() : undefined;
+    onImport(items, sourceUrl);
     onClose();
   };
 

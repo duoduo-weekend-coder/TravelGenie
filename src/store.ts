@@ -10,12 +10,32 @@ function getTripStorageKey(itineraryId: string): string {
   return `travel-plan-data:${itineraryId}`;
 }
 
+function backfillListUrls(trip: Trip): void {
+  if (trip.googleMapsListUrls && trip.googleMapsListUrls.length > 0) return;
+  const allItems = [...trip.days.flatMap(d => d.items), ...trip.unassignedItems];
+  // Count how many items share each sourceUrl — a list URL will have multiple items
+  const urlCounts = new Map<string, number>();
+  for (const item of allItems) {
+    if (item.sourceType === 'google_maps' && item.sourceUrl) {
+      urlCounts.set(item.sourceUrl, (urlCounts.get(item.sourceUrl) || 0) + 1);
+    }
+  }
+  // Only keep URLs that were used by 2+ items (i.e. likely a list, not a single place)
+  const listUrls = [...urlCounts.entries()]
+    .filter(([, count]) => count >= 2)
+    .map(([url]) => url);
+  if (listUrls.length > 0) {
+    trip.googleMapsListUrls = listUrls;
+  }
+}
+
 function loadTripFromStorage(key: string): Trip {
   try {
     const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.unassignedItems) parsed.unassignedItems = [];
+      backfillListUrls(parsed);
       return parsed;
     }
   } catch (e) {
@@ -721,6 +741,14 @@ export function useTripStore(activeItineraryId: string) {
     });
   };
 
+  const addGoogleMapsListUrl = (url: string) => {
+    setTrip(prev => {
+      const existing = prev.googleMapsListUrls || [];
+      if (existing.includes(url)) return prev;
+      return { ...prev, googleMapsListUrls: [...existing, url] };
+    });
+  };
+
   const setTitle = (title: string) => {
     setTrip(prev => ({ ...prev, title }));
   };
@@ -755,6 +783,7 @@ export function useTripStore(activeItineraryId: string) {
     updateDayDate,
     setTripRange,
     importSchedule,
+    addGoogleMapsListUrl,
     undo,
     redo,
     canUndo,

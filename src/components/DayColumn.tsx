@@ -5,6 +5,7 @@ import { Day, AgendaItem } from '../types';
 import { AgendaCard } from './AgendaCard';
 import { TimeRuler, START_HOUR, getRulerHeight } from './TimeRuler';
 import { getDayColor } from '../dayColors';
+import { parseStartHour } from '../utils/time';
 
 const AM_END_HOUR = 12;
 const PM_END_HOUR = 22;
@@ -224,16 +225,7 @@ interface DropZoneProps {
 }
 
 function parseItemStartHour(item: AgendaItem): number | null {
-  if (!item.time) return null;
-  // Handle "9:00 AM", "2:00 PM", "14:30", "9:00 AM - 11:00 AM", etc.
-  const match = item.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (!match) return null;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const ampm = match[3]?.toUpperCase();
-  if (ampm === 'PM' && hours !== 12) hours += 12;
-  if (ampm === 'AM' && hours === 12) hours = 0;
-  return hours + minutes / 60;
+  return parseStartHour(item.time);
 }
 
 function DropZone({ id, label, items, highlightedItemId, onItemClick, onBlankClick, className, dayDate, zoneHeight, zoneStartHour, pixelsPerHour }: DropZoneProps) {
