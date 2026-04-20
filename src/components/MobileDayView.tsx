@@ -128,19 +128,30 @@ export function MobileDayView({ day, dayIndex, isToday, onItemClick, onAddItem }
         </>
       )}
 
-      {onAddItem && (
-        <button className="mobile-add-item-btn" onClick={onAddItem}>
-          + Add Item
-        </button>
-      )}
-
       {day.endLocation && (
         <AnchorCard item={day.endLocation} label="END" onItemClick={onItemClick} />
       )}
 
       {morningItems.length === 0 && afternoonItems.length === 0 && eveningItems.length === 0 && hotelItems.length === 0 &&
         !day.startLocation && !day.endLocation && (
-        <div className="mobile-empty-day">No items for this day</div>
+        <div className="mobile-empty-day">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" style={{ marginBottom: 8 }}>
+            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 15h4m0 0h4m-4 0v-4m0 4v4" stroke="#d1d5db"/>
+          </svg>
+          <p>No items for this day</p>
+          {onAddItem && (
+            <button className="mobile-link-btn" onClick={onAddItem} style={{ marginTop: 16 }}>
+              + Add first item
+            </button>
+          )}
+        </div>
+      )}
+
+      {(morningItems.length > 0 || afternoonItems.length > 0 || eveningItems.length > 0 || hotelItems.length > 0 ||
+        day.startLocation || day.endLocation) && onAddItem && (
+        <button className="mobile-add-item-btn" onClick={onAddItem}>
+          + Add item
+        </button>
       )}
     </div>
   );

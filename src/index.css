@@ -128,7 +128,9 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .header-separator {
@@ -1322,8 +1324,9 @@ body {
 }
 
 .add-day-btn:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
+  border-color: #6366f1;
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.04);
 }
 
 /* ========= Agenda Card (compact for grid) ========= */
@@ -1370,7 +1373,7 @@ body {
 
 .card-content h4 {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -1407,21 +1410,26 @@ body {
 }
 
 .card-map-link {
-  margin-left: 4px;
+  margin-left: 6px;
   font-size: 10px;
   color: #3b82f6;
   text-decoration: none;
   font-weight: 600;
+  padding: 2px 4px;
+  border-radius: 3px;
 }
 .card-map-link:hover {
   text-decoration: underline;
 }
+.card-map-link:active {
+  background: #dbeafe;
+}
 
 .card-thumb {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 5px;
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -1437,6 +1445,69 @@ body {
 .map-strip > div {
   height: 100%;
   width: 100%;
+}
+
+/* ========= API Key Modal ========= */
+.api-key-input {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.api-key-modal-footer {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.api-key-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  line-height: 1.6;
+}
+
+.api-key-hint a {
+  color: #6366f1;
+  text-decoration: none;
+}
+
+.api-key-hint a:hover {
+  text-decoration: underline;
+}
+
+.inline-link-btn {
+  background: none;
+  border: none;
+  color: #6366f1;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.inline-link-btn:hover {
+  color: #4f46e5;
+}
+
+/* ========= Planning / Header inline status ========= */
+.planning-error {
+  color: #ef4444;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ========= Modal text helpers ========= */
+.modal-subtitle {
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.modal-error-text {
+  font-size: 14px;
+  color: #ef4444;
+  margin-bottom: 16px;
+  line-height: 1.5;
 }
 
 /* ========= Modal styles ========= */
@@ -1915,20 +1986,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: max(12px, env(safe-area-inset-top, 12px)) 16px 12px;
   background: white;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
 }
 
 .mobile-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: #111827;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-right: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .mobile-header-actions {
@@ -2008,18 +2080,25 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 8px 4px 6px;
+  gap: 3px;
+  padding: 10px 4px 8px;
   border: none;
   background: none;
   color: #9ca3af;
   font-size: 10px;
+  font-weight: 500;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.15s;
+  border-top: 2px solid transparent;
 }
 .mobile-tab.active {
   color: #6366f1;
+  border-top-color: #6366f1;
+  border-top-width: 3px;
+}
+.mobile-tab:active {
+  opacity: 0.7;
 }
 .mobile-tab svg {
   width: 22px;
@@ -2105,27 +2184,41 @@ body {
 }
 
 .mobile-section-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7280;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 12px 0 4px;
+  letter-spacing: 0.07em;
+  padding: 16px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
 }
 
 .mobile-anchor-card {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   margin: 4px 0;
   background: white;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px dashed #d1d5db;
   cursor: pointer;
+  min-height: 48px;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s;
+  will-change: transform;
 }
 .mobile-anchor-card:active {
-  background: #f9fafb;
+  background: #f3f4f6;
+  transform: scale(0.985);
 }
 
 .mobile-anchor-label {
@@ -2155,24 +2248,31 @@ body {
 
 .mobile-add-item-btn {
   width: 100%;
-  padding: 12px;
-  margin-top: 8px;
-  border: 2px dashed #d1d5db;
-  border-radius: 10px;
-  background: transparent;
-  color: #6b7280;
+  padding: 13px;
+  margin-top: 10px;
+  border: 1.5px dashed #c4b5fd;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.04);
+  color: #6366f1;
   font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s, background 0.15s;
+  will-change: transform;
 }
 .mobile-add-item-btn:active {
   border-color: #6366f1;
   color: #6366f1;
-  background: rgba(99, 102, 241, 0.05);
+  background: rgba(99, 102, 241, 0.06);
+  transform: scale(0.98);
 }
 
 .mobile-empty-day,
 .mobile-empty-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   padding: 48px 16px;
   color: #9ca3af;
@@ -2200,41 +2300,58 @@ body {
   padding: 12px 16px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
   flex-shrink: 0;
   background: white;
   border-bottom: 1px solid #e5e7eb;
 }
 .mobile-day-picker::-webkit-scrollbar { display: none; }
+.mobile-day-picker > * {
+  scroll-snap-align: start;
+}
 
 .mobile-day-chip {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 14px;
+  padding: 10px 16px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 12px;
   background: white;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: all 0.15s;
+  will-change: transform;
+  min-height: 56px;
+  min-width: 64px;
+  justify-content: center;
+}
+.mobile-day-chip:active {
+  transform: scale(0.93);
 }
 .mobile-day-chip.active {
   border-color: #6366f1;
   background: #eef2ff;
+  box-shadow: 0 0 0 1.5px #6366f1;
 }
-.mobile-day-chip.today {
-  border-color: #6366f1;
+.mobile-day-chip.today:not(.active) {
+  border-color: #a5b4fc;
+  background: #f5f3ff;
+}
+.mobile-day-chip.today .chip-day {
+  color: #6366f1;
 }
 
 .chip-day {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: #374151;
 }
 .chip-date {
   font-size: 11px;
   color: #9ca3af;
+  font-weight: 400;
 }
 .mobile-day-chip.active .chip-day,
 .mobile-day-chip.active .chip-date {
@@ -2286,16 +2403,20 @@ body {
 
 .nearby-filter-btn {
   flex-shrink: 0;
-  padding: 4px 12px;
+  padding: 7px 14px;
+  min-height: 36px;
   border: 1px solid #e5e7eb;
-  border-radius: 16px;
+  border-radius: 18px;
   background: white;
   color: #6b7280;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: all 0.15s;
+}
+.nearby-filter-btn:active {
+  transform: scale(0.94);
 }
 .nearby-filter-btn.active {
   border-color: #6366f1;
@@ -2396,16 +2517,20 @@ body {
 
 .mobile-map-day-btn {
   flex-shrink: 0;
-  padding: 4px 12px;
+  padding: 7px 14px;
+  min-height: 36px;
   border: 1.5px solid #e5e7eb;
-  border-radius: 16px;
+  border-radius: 18px;
   background: white;
   color: #6b7280;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: all 0.15s;
+}
+.mobile-map-day-btn:active {
+  transform: scale(0.94);
 }
 .mobile-map-day-btn.active {
   border-color: var(--day-color, #6366f1);
@@ -2422,14 +2547,20 @@ body {
 /* ---- AgendaCard touch adjustments inside mobile ---- */
 .mobile-view .agenda-card {
   cursor: pointer;
-  padding: 10px 12px;
-  margin-bottom: 6px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
   font-size: 14px;
-  border-radius: 10px;
+  border-radius: 12px;
+  min-height: 56px;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s, box-shadow 0.1s;
+  will-change: transform;
+  border-left-width: 4px;
 }
 .mobile-view .agenda-card:active {
-  background: #f9fafb;
+  background: #f3f4f6;
+  transform: scale(0.985);
+  box-shadow: none;
 }
 .mobile-view .agenda-card h4 {
   font-size: 15px;

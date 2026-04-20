@@ -775,7 +775,7 @@ function App() {
             >
               {isPlanning ? '✨ Planning...' : (geminiKey ? '✨ AI Plan' : '✨ Auto Plan')}
             </button>
-            {planningError && <span style={{ color: 'red', fontSize: '12px' }}>Error: {planningError}</span>}
+            {planningError && <span className="planning-error">Error: {planningError}</span>}
             <button
               className="clear-plan-btn"
               onClick={() => {
@@ -1007,7 +1007,7 @@ function App() {
         <div className="modal-overlay">
           <div className="modal">
             <h2>Loading Shared Trip...</h2>
-            <p style={{ color: '#666', fontSize: 14 }}>Please wait while the shared trip is being loaded.</p>
+            <p className="modal-subtitle">Please wait while the shared trip is being loaded.</p>
           </div>
         </div>
       )}
@@ -1015,7 +1015,7 @@ function App() {
         <div className="modal-overlay" onClick={() => setLoadShareError(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Failed to Load Shared Trip</h2>
-            <p style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{loadShareError}</p>
+            <p className="modal-error-text">{loadShareError}</p>
             <div className="modal-actions">
               <button className="save-btn" onClick={() => setLoadShareError(null)}>OK</button>
             </div>
@@ -1026,7 +1026,7 @@ function App() {
         <div className="modal-overlay" onClick={() => setShareUrl(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Trip Shared!</h2>
-            <p style={{ fontSize: 14, color: '#666', marginBottom: 12 }}>
+            <p className="modal-subtitle">
               Anyone with this link can view your trip. The link expires in 90 days.
             </p>
             <div className="share-url-row">
@@ -1055,7 +1055,7 @@ function App() {
         <div className="modal-overlay" onClick={() => setShareError(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Share Failed</h2>
-            <p style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{shareError}</p>
+            <p className="modal-error-text">{shareError}</p>
             <div className="modal-actions">
               <button className="save-btn" onClick={() => setShareError(null)}>OK</button>
             </div>
@@ -1066,16 +1066,16 @@ function App() {
         <div className="modal-overlay" onClick={() => setIsApiKeyModalOpen(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h2>Set Gemini API Key</h2>
-            <p style={{ marginBottom: 16, fontSize: 14, color: '#666' }}>
-              To use AI-powered planning, please enter your Google Gemini API Key. 
+            <p className="modal-subtitle">
+              To use AI-powered planning, please enter your Google Gemini API Key.
               The key is stored locally in your browser.
             </p>
-            <input 
-              type="password" 
-              placeholder="Enter API Key" 
+            <input
+              type="password"
+              placeholder="Enter API Key"
               value={apiKeyInput}
               onChange={e => setApiKeyInput(e.target.value)}
-              style={{ width: '100%', marginBottom: 16 }}
+              className="api-key-input"
             />
             <div className="modal-actions">
               <button onClick={() => setIsApiKeyModalOpen(false)}>Cancel</button>
@@ -1087,12 +1087,12 @@ function App() {
                 Save & Enable AI
               </button>
             </div>
-            <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #eee' }}>
-               <p style={{ fontSize: 13, color: '#888' }}>
-                 Don't have a key? You can <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">get one here</a>.
-                 <br/>
-                 Or <button style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', padding: 0, textDecoration: 'underline' }} onClick={() => { setIsApiKeyModalOpen(false); autoPlan(); }}>use basic planner instead</button>.
-               </p>
+            <div className="api-key-modal-footer">
+              <p className="api-key-hint">
+                Don't have a key? You can <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">get one here</a>.
+                <br />
+                Or <button className="inline-link-btn" onClick={() => { setIsApiKeyModalOpen(false); autoPlan(); }}>use basic planner instead</button>.
+              </p>
             </div>
           </div>
         </div>

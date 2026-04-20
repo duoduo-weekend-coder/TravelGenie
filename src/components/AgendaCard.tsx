@@ -81,13 +81,13 @@ function getHoursText(item: AgendaItem, dayDate?: string): string {
 }
 
 export function AgendaCard({ item, onClick, isHighlighted, dayDate, disableDrag }: Props) {
-  const [hovered, setHovered] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const { isOpen, reason } = checkIsOpen(item, dayDate);
   const hoursText = getHoursText(item, dayDate);
   const notesLines = item.notes ? item.notes.split('\n') : [];
   const notesIsTruncated = notesLines.length > NOTES_MAX_LINES;
-  const showFullNotes = hovered;
-  const tooltip = isOpen 
+  const showFullNotes = notesExpanded;
+  const tooltip = isOpen
     ? (hoursText || item.title)
     : `${reason}. ${hoursText}`;
 
@@ -114,8 +114,6 @@ export function AgendaCard({ item, onClick, isHighlighted, dayDate, disableDrag 
       {...(disableDrag ? {} : attributes)}
       {...(disableDrag ? {} : listeners)}
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       className={`agenda-card ${isHighlighted ? 'highlighted' : ''} ${!isOpen ? 'closed-warning' : ''}`}
       title={tooltip}
     >
@@ -145,17 +143,23 @@ export function AgendaCard({ item, onClick, isHighlighted, dayDate, disableDrag 
           </span>
         )}
         {item.notes && (
-          <p className="notes" style={{
-            fontSize: '11px', color: '#6b7280', marginTop: '4px', fontStyle: 'italic',
-            borderTop: '1px solid #eee', paddingTop: '2px', whiteSpace: 'pre-wrap',
-            ...(notesIsTruncated && !showFullNotes ? {
-              display: '-webkit-box',
-              WebkitLineClamp: NOTES_MAX_LINES,
-              WebkitBoxOrient: 'vertical' as const,
-              overflow: 'hidden',
-            } : {})
-          }}>
+          <p
+            className="notes"
+            onClick={notesIsTruncated ? (e) => { e.stopPropagation(); setNotesExpanded(v => !v); } : undefined}
+            style={{
+              fontSize: '11px', color: '#6b7280', marginTop: '4px', fontStyle: 'italic',
+              borderTop: '1px solid #eee', paddingTop: '2px', whiteSpace: 'pre-wrap',
+              cursor: notesIsTruncated ? 'pointer' : undefined,
+              ...(notesIsTruncated && !showFullNotes ? {
+                display: '-webkit-box',
+                WebkitLineClamp: NOTES_MAX_LINES,
+                WebkitBoxOrient: 'vertical' as const,
+                overflow: 'hidden',
+              } : {})
+            }}
+          >
             {item.notes}
+            {notesIsTruncated && !showFullNotes && <span style={{ color: '#6366f1', fontStyle: 'normal', fontWeight: 600 }}> more</span>}
           </p>
         )}
         {!isOpen && <span className="warning-badge">⚠️ {reason}</span>}
