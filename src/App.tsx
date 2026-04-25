@@ -639,6 +639,7 @@ function App() {
           onEditItem={handleEditItem}
           onAddItem={(dayId) => handleAddItem(dayId)}
           onToggleMobile={toggleMobile}
+          onImport={() => setShowImport(true)}
           onSync={handleSyncGoogleMaps}
           syncing={syncing}
           syncMessage={syncMessage}
@@ -718,6 +719,7 @@ function App() {
                       className="itinerary-tab-delete"
                       onClick={(e) => { e.stopPropagation(); deleteItinerary(tab.id); }}
                       title="Delete itinerary"
+                      aria-label="Delete itinerary"
                     >
                       ×
                     </button>
@@ -746,8 +748,16 @@ function App() {
             </button>
             <div className="header-separator" />
             <div className="undo-redo-buttons">
-              <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" className="undo-btn">↩</button>
-              <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" className="redo-btn">↪</button>
+              <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo" className="undo-btn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
+                </svg>
+              </button>
+              <button onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" className="redo-btn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/>
+                </svg>
+              </button>
             </div>
             <div className="date-range-inputs">
               <input
@@ -772,8 +782,9 @@ function App() {
               onClick={handleAutoPlanClick}
               disabled={isPlanning}
               title={geminiKey ? "Auto Plan with Gemini AI" : "Auto Plan (Click to set API Key)"}
+              aria-label={geminiKey ? "Auto Plan with Gemini AI" : "Auto Plan (click to set API Key)"}
             >
-              {isPlanning ? '✨ Planning...' : (geminiKey ? '✨ AI Plan' : '✨ Auto Plan')}
+              {isPlanning ? 'Planning...' : (geminiKey ? 'AI Plan' : 'Auto Plan')}
             </button>
             {planningError && <span className="planning-error">Error: {planningError}</span>}
             <button
@@ -784,8 +795,9 @@ function App() {
                 }
               }}
               title="Clear all days and move items back to list"
+              aria-label="Clear plan"
             >
-              🗑️ Clear Plan
+              Clear Plan
             </button>
 
             {/* Import dropdown */}
@@ -826,7 +838,7 @@ function App() {
                 {syncing ? 'Syncing...' : 'Sync'}
               </button>
             )}
-            {syncMessage && <span className="sync-message">{syncMessage}</span>}
+            <span className="sync-message" aria-live="polite">{syncMessage ?? ''}</span>
 
             {/* File dropdown */}
             <div className="dropdown" ref={fileMenuRef}>
@@ -873,8 +885,9 @@ function App() {
               onClick={handleShare}
               disabled={isSharing}
               title="Share this trip via link"
+              aria-label="Share trip"
             >
-              {isSharing ? 'Sharing...' : '🔗 Share'}
+              {isSharing ? 'Sharing...' : 'Share'}
             </button>
             <button
               className="mobile-toggle-btn"

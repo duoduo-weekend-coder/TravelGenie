@@ -194,7 +194,7 @@ export function XhsPanel({ geminiKey, onClose, hidden }: XhsPanelProps) {
     <div className="xhs-panel" style={hidden ? { display: 'none' } : undefined}>
       <div className="xhs-panel-header">
         <h3>Import XHS</h3>
-        <button className="xhs-panel-close" onClick={onClose} title="Close">×</button>
+        <button className="xhs-panel-close" onClick={onClose} title="Close" aria-label="Close XHS panel">×</button>
       </div>
 
       <div className="xhs-panel-body">
@@ -239,6 +239,7 @@ export function XhsPanel({ geminiKey, onClose, hidden }: XhsPanelProps) {
                       className="xhs-panel-remove-btn"
                       onClick={(e) => { e.stopPropagation(); removeRow(idx); }}
                       title="Remove"
+                      aria-label="Remove item"
                     >
                       ×
                     </button>
@@ -275,7 +276,7 @@ export function XhsPanel({ geminiKey, onClose, hidden }: XhsPanelProps) {
       {viewingRow && viewingRow.draft && (
         <div className="modal-overlay" onClick={() => setViewingRow(null)}>
           <div className="modal xhs-detail-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-x" onClick={() => setViewingRow(null)} title="Close">×</button>
+            <button className="modal-close-x" onClick={() => setViewingRow(null)} title="Close" aria-label="Close">×</button>
             <h2>{viewingRow.draft.title}</h2>
 
             {viewingRow.draft.sourceMeta?.author && (

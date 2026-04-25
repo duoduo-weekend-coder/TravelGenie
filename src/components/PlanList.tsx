@@ -261,6 +261,7 @@ export function PlanList({ items, highlightedItemId, onItemClick, onDeleteItem, 
                   className="plan-item-delete-btn"
                   onClick={(e) => { e.stopPropagation(); onDeleteItem(item.id); }}
                   title="Remove from list"
+                  aria-label="Remove from list"
                 >
                   ×
                 </button>

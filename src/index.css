@@ -10,14 +10,14 @@ body {
 }
 
 #root {
-  height: 100vh;
+  height: 100dvh;
 }
 
 /* ========= App Layout ========= */
 .app {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -99,12 +99,17 @@ body {
 }
 
 .itinerary-tab-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
   color: #9ca3af;
   font-size: 14px;
   line-height: 1;
-  padding: 2px 6px 2px 0;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px 8px 4px 2px;
   cursor: pointer;
   border-radius: 0 999px 999px 0;
 }
@@ -219,13 +224,17 @@ body {
   gap: 2px;
 }
 .undo-btn, .redo-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 32px;
   padding: 4px 8px;
-  font-size: 16px;
   background: #f3f4f6;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   cursor: pointer;
-  line-height: 1;
+  color: #374151;
 }
 .undo-btn:disabled, .redo-btn:disabled {
   opacity: 0.3;
@@ -660,10 +669,11 @@ body {
 
 .plan-item-delete-btn {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 18px;
-  height: 18px;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
   border: none;
   border-radius: 50%;
   background: #e5e7eb;
@@ -1511,6 +1521,21 @@ body {
 }
 
 /* ========= Modal styles ========= */
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-slide-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes modal-overlay-in { from { opacity: 1; } to { opacity: 1; } }
+  @keyframes modal-slide-in   { from { opacity: 1; } to { opacity: 1; } }
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1519,6 +1544,7 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: modal-overlay-in 150ms ease-out;
 }
 
 .modal {
@@ -1529,18 +1555,16 @@ body {
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
-}
-
-.modal {
   position: relative;
+  animation: modal-slide-in 200ms ease-out;
 }
 
 .modal-close-x {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 28px;
-  height: 28px;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 50%;
   background: #f3f4f6;
@@ -1990,6 +2014,12 @@ body {
   background: white;
   border-bottom: 1px solid #e5e7eb;
   flex-shrink: 0;
+  gap: 12px;
+}
+
+.mobile-header-title-group {
+  min-width: 0;
+  flex: 1;
 }
 
 .mobile-title {
@@ -1999,8 +2029,15 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
+}
+
+.mobile-subtitle {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mobile-header-actions {
@@ -2274,14 +2311,38 @@ body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 16px;
+  padding: 48px 24px;
+  gap: 8px;
   color: #9ca3af;
   font-size: 15px;
 }
 
+.mobile-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 4px;
+}
+
+.mobile-empty-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  line-height: 1.5;
+  max-width: 240px;
+}
+
+.mobile-empty-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  width: 100%;
+  max-width: 220px;
+}
+
 .mobile-link-btn {
-  margin-top: 12px;
-  padding: 8px 20px;
+  padding: 10px 20px;
+  min-height: 44px;
   border: 1px solid #6366f1;
   border-radius: 8px;
   background: white;
@@ -2291,6 +2352,14 @@ body {
 }
 .mobile-link-btn:active {
   background: #eef2ff;
+}
+
+.mobile-link-btn-primary {
+  background: #6366f1;
+  color: white;
+}
+.mobile-link-btn-primary:active {
+  background: #4f46e5;
 }
 
 /* ---- Day Picker Chips ---- */

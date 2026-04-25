@@ -343,7 +343,7 @@ export function ImportModal({ onImport, onScheduleImport, tripDays, tripYear, on
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal import-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close-x" onClick={onClose} title="Close">×</button>
+        <button className="modal-close-x" onClick={onClose} title="Close" aria-label="Close">×</button>
         <h2>{scheduleOnly ? 'Import Schedule' : 'Import Places and Posts'}</h2>
         <p className="import-hint">
           {scheduleOnly

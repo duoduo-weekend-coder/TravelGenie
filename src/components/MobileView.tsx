@@ -16,6 +16,7 @@ interface Props {
   onEditItem: (item: AgendaItem) => void;
   onAddItem: (dayId: string) => void;
   onToggleMobile: () => void;
+  onImport?: () => void;
   onSync?: () => void;
   syncing?: boolean;
   syncMessage?: string | null;
@@ -29,9 +30,13 @@ function getTodayStr(): string {
   return `${y}-${m}-${day}`;
 }
 
-export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleMobile, onSync, syncing, syncMessage }: Props) {
+export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleMobile, onImport, onSync, syncing, syncMessage }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('today');
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(() => {
+    const todayStr = getTodayStr();
+    const idx = trip.days.findIndex(d => d.date === todayStr);
+    return Math.max(0, idx);
+  });
   const [mapFocusedDayId, setMapFocusedDayId] = useState<string | null>(null);
 
   const todayStr = getTodayStr();
@@ -54,7 +59,22 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
       <SortableContext items={allItemIds}>
         <div className="mobile-view">
           <div className="mobile-header">
-            <h1 className="mobile-title">{trip.title}</h1>
+            <div className="mobile-header-title-group">
+              <h1 className="mobile-title">{trip.title}</h1>
+              {trip.days.length > 0 && (() => {
+                const startDate = new Date(trip.days[0].date + 'T00:00:00');
+                const endDate = new Date(trip.days[trip.days.length - 1].date + 'T00:00:00');
+                const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const dayLabel = todayDayIndex >= 0
+                  ? `Day ${todayDayIndex + 1} of ${trip.days.length}`
+                  : `${trip.days.length} day${trip.days.length !== 1 ? 's' : ''}`;
+                return (
+                  <p className="mobile-subtitle" aria-label={`${dayLabel}, ${fmt(startDate)} to ${fmt(endDate)}`}>
+                    {dayLabel} · {fmt(startDate)}–{fmt(endDate)}
+                  </p>
+                );
+              })()}
+            </div>
             <div className="mobile-header-actions">
               {onSync && trip.googleMapsListUrls && trip.googleMapsListUrls.length > 0 && (
                 <button
@@ -62,15 +82,16 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
                   onClick={onSync}
                   disabled={syncing}
                   title="Sync new places from Google Maps lists"
+                  aria-label="Sync new places from Google Maps lists"
                 >
-                  <svg className={syncing ? 'spin' : ''} width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                  <svg className={syncing ? 'spin' : ''} width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                     <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/>
                     <path fillRule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/>
                   </svg>
                   {syncing ? 'Syncing...' : 'Sync'}
                 </button>
               )}
-              {syncMessage && <span className="mobile-sync-message">{syncMessage}</span>}
+              <span className="mobile-sync-message" aria-live="polite">{syncMessage ?? ''}</span>
               <button className="mobile-desktop-btn" onClick={onToggleMobile}>
                 Desktop
               </button>
@@ -89,13 +110,21 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
                 />
               ) : (
                 <div className="mobile-empty-tab">
-                  <p>No itinerary for today</p>
-                  <button
-                    className="mobile-link-btn"
-                    onClick={() => setActiveTab('days')}
-                  >
-                    Browse all days
-                  </button>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  <p className="mobile-empty-title">No itinerary for today</p>
+                  <p className="mobile-empty-hint">Today isn't in your trip yet</p>
+                  <div className="mobile-empty-actions">
+                    <button className="mobile-link-btn" onClick={() => setActiveTab('days')}>
+                      Browse all days
+                    </button>
+                    {onImport && (
+                      <button className="mobile-link-btn mobile-link-btn-primary" onClick={onImport}>
+                        Import places
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             )}
@@ -190,8 +219,18 @@ export function MobileView({ trip, allMapItems, onEditItem, onAddItem, onToggleM
                   </div>
                 ) : (
                   <div className="mobile-empty-tab">
-                    <p>No unassigned places</p>
-                    <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 4 }}>Import places or use Sync to add items here</p>
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/>
+                    </svg>
+                    <p className="mobile-empty-title">No places yet</p>
+                    <p className="mobile-empty-hint">Import from Google Maps, paste a link, or add manually</p>
+                    {onImport && (
+                      <div className="mobile-empty-actions">
+                        <button className="mobile-link-btn mobile-link-btn-primary" onClick={onImport}>
+                          Import places
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
